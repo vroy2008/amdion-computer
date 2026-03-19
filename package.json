@@ -1,0 +1,27 @@
+{
+  "name": "amdion-desktop",
+  "version": "1.0.0",
+  "description": "AMDION Focused Computer - Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "author": "AMDION",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.amdion.desktop",
+    "productName": "AMDION",
+    "mac": {
+      "category": "public.app-category.productivity"
+    }
+  },
+  "dependencies": {
+    "@google/genai": "^1.45.0",
+    "dotenv": "^17.3.1"
+  }
+}

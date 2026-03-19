@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Amdion Observer Nudge</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Drag Handle wrapper for the whole floating widget */
+        #widget-wrapper {
+            margin-top: 10px;
+            width: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* Make it draggable */
+            -webkit-app-region: drag;
+        }
+
+        #control-bar {
+            background-color: rgba(20, 20, 20, 0.95);
+            color: #f5fcff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            width: 100%;
+            box-sizing: border-box;
+            cursor: move;
+        }
+
+        /* Prevent dragging on interactive elements inside the drag region */
+        .switch, button, .control-label, #scan-indicator {
+            -webkit-app-region: no-drag;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.2);
+            transition: .4s; border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute; content: "";
+            height: 14px; width: 14px; left: 3px; bottom: 3px;
+            background-color: white; transition: .4s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #2480ba; }
+        input:checked + .slider:before { transform: translateX(14px); }
+
+        .control-label {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .spacer {
+            flex-grow: 1;
+        }
+
+        #btn-manual-scan {
+            background-color: transparent;
+            border: 1px solid #2480ba;
+            color: #2480ba;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #btn-manual-scan:hover {
+            background-color: rgba(36, 128, 186, 0.1);
+        }
+
+        #btn-reset {
+            background-color: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #f5fcff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #btn-reset:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Enhanced Persistent Nudge Container */
+        #nudge-container {
+            margin-top: 10px;
+            background-color: rgba(20, 20, 20, 0.95);
+            color: #f5fcff;
+            border-left: 4px solid #2480ba;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            width: 100%;
+            box-sizing: border-box;
+            /* Buttons inside this need no-drag */
+        }
+
+        #nudge-container.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #nudge-observation {
+            font-size: 13px;
+            color: rgba(245, 252, 255, 0.7);
+            line-height: 1.4;
+            font-style: italic;
+        }
+
+        .nudge-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        #nudge-message {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.5;
+            flex-grow: 1;
+        }
+
+        .nudge-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nudge-buttons button {
+            -webkit-app-region: no-drag;
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #f5fcff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nudge-buttons button.primary {
+            background-color: transparent;
+            border: 1px solid #2480ba;
+            color: #2480ba;
+        }
+
+        .nudge-buttons button.primary:hover {
+            background-color: rgba(36, 128, 186, 0.1);
+        }
+
+        .nudge-buttons button:hover:not(.primary) {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        #scan-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #2480ba;
+            margin-left: 4px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #scan-indicator.scanning {
+            opacity: 1;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(36, 128, 186, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(36, 128, 186, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(36, 128, 186, 0); }
+        }
+
+        /* --- Chat Interface --- */
+        #chat-container {
+            margin-top: 10px;
+            background-color: rgba(20, 20, 20, 0.95);
+            color: #f5fcff;
+            border-left: 4px solid #2480ba;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: none; /* hidden by default */
+            flex-direction: column;
+            width: 100%;
+            box-sizing: border-box;
+            -webkit-app-region: no-drag;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        #chat-container.show {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #chat-history {
+            max-height: 250px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .chat-message {
+            padding: 8px 12px;
+            border-radius: 6px;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+
+        .chat-message.user {
+            align-self: flex-end;
+            background-color: rgba(36, 128, 186, 0.2);
+            border: 1px solid rgba(36, 128, 186, 0.4);
+        }
+
+        .chat-message.amdion {
+            align-self: flex-start;
+            background-color: rgba(255, 255, 255, 0.05);
+            color: rgba(245, 252, 255, 0.9);
+        }
+
+        #chat-input-wrapper {
+            display: flex;
+            gap: 8px;
+        }
+
+        #chat-input {
+            flex-grow: 1;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #f5fcff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #chat-input:focus {
+            border-color: #2480ba;
+        }
+
+        /* --- Settings Interface --- */
+        #settings-container {
+            margin-top: 10px;
+            background-color: rgba(20, 20, 20, 0.95);
+            color: #f5fcff;
+            border-left: 4px solid #ba9e24;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            box-sizing: border-box;
+            -webkit-app-region: no-drag;
+            gap: 12px;
+        }
+
+        #settings-container.show {
+            display: flex;
+        }
+
+        .settings-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .settings-row label {
+            font-size: 12px;
+            color: rgba(245, 252, 255, 0.7);
+        }
+
+        .settings-row input, .settings-row select {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #f5fcff;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            outline: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .settings-row select option {
+            background-color: #1a1a1a;
+            color: #f5fcff;
+        }
+
+        #btn-settings-toggle {
+            background: transparent;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 4px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        #btn-settings-toggle:hover {
+            opacity: 1;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="widget-wrapper">
+        <div id="control-bar">
+            <button id="btn-settings-toggle" title="Settings">⚙️</button>
+            <label class="switch">
+                <input type="checkbox" id="loop-toggle">
+                <span class="slider"></span>
+            </label>
+            <span class="control-label">Continuous</span>
+            <div id="scan-indicator"></div>
+            <div class="spacer"></div>
+            <button id="btn-toggle-chat">Chat ▼</button>
+            <button id="btn-manual-scan">Review & Assist</button>
+            <button id="btn-reset">Reset</button>
+        </div>
+        
+        <div id="nudge-container">
+            <div id="nudge-observation">Observing...</div>
+            <div class="nudge-footer">
+                <div id="nudge-message">Amdion Observer</div>
+                <div class="nudge-buttons">
+                    <button id="btn-dismiss">Dismiss</button>
+                    <button id="btn-action" class="primary">Execute</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="chat-container">
+            <div id="chat-history"></div>
+            <div id="chat-input-wrapper">
+                <input type="text" id="chat-input" placeholder="Ask Amdion about your screen..." autocomplete="off">
+                <button id="btn-send-chat" class="primary">Send</button>
+            </div>
+        </div>
+
+        <div id="settings-container">
+            <div class="settings-row">
+                <label>API Key (Gemini):</label>
+                <input type="password" id="input-api-key" placeholder="Enter API Key" autocomplete="off">
+            </div>
+            <div class="settings-row">
+                <label>AI Model:</label>
+                <select id="select-model">
+                    <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash (Experimental)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                </select>
+            </div>
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                <span id="settings-message" style="font-size: 12px; color: #4caf50; opacity: 0; transition: opacity 0.3s;">Saved!</span>
+                <button id="btn-save-settings" class="primary" style="padding: 6px 12px;">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        const container = document.getElementById('nudge-container');
+        const obsField = document.getElementById('nudge-observation');
+        const msgField = document.getElementById('nudge-message');
+        const btnAction = document.getElementById('btn-action');
+        const btnDismiss = document.getElementById('btn-dismiss');
+
+        const loopToggle = document.getElementById('loop-toggle');
+        const btnManualScan = document.getElementById('btn-manual-scan');
+        const btnReset = document.getElementById('btn-reset');
+        const scanIndicator = document.getElementById('scan-indicator');
+
+        const chatContainer = document.getElementById('chat-container');
+        const chatHistory = document.getElementById('chat-history');
+        const chatInput = document.getElementById('chat-input');
+        const btnSendChat = document.getElementById('btn-send-chat');
+        const btnToggleChat = document.getElementById('btn-toggle-chat');
+
+        const btnSettingsToggle = document.getElementById('btn-settings-toggle');
+        const settingsContainer = document.getElementById('settings-container');
+        const inputApiKey = document.getElementById('input-api-key');
+        const selectModel = document.getElementById('select-model');
+        const btnSaveSettings = document.getElementById('btn-save-settings');
+
+        let isChatOpen = false;
+        let isSettingsOpen = false;
+
+        // Fetch config on load
+        ipcRenderer.send('get-config');
+        ipcRenderer.on('config-data', (event, config) => {
+            if (config.apiKey) inputApiKey.value = config.apiKey;
+            if (config.model) selectModel.value = config.model;
+        });
+
+        btnSettingsToggle.addEventListener('click', () => {
+            isSettingsOpen = !isSettingsOpen;
+            if (isSettingsOpen) {
+                settingsContainer.classList.add('show');
+                if (isChatOpen) btnToggleChat.click(); // Close chat if open
+            } else {
+                settingsContainer.classList.remove('show');
+            }
+        });
+
+        btnSaveSettings.addEventListener('click', () => {
+            const newConfig = {
+                apiKey: inputApiKey.value.trim(),
+                model: selectModel.value
+            };
+            ipcRenderer.send('save-config', newConfig);
+        });
+        
+        ipcRenderer.on('config-saved', () => {
+            const msg = document.getElementById('settings-message');
+            msg.style.opacity = 1;
+            setTimeout(() => { msg.style.opacity = 0; }, 3000);
+        });
+
+        btnToggleChat.addEventListener('click', () => {
+            isChatOpen = !isChatOpen;
+            if (isChatOpen) {
+                chatContainer.classList.add('show');
+                btnToggleChat.innerText = 'Chat ▲';
+                chatInput.focus();
+            } else {
+                chatContainer.classList.remove('show');
+                btnToggleChat.innerText = 'Chat ▼';
+            }
+        });
+
+        loopToggle.addEventListener('change', (e) => {
+            ipcRenderer.send('set-scan-loop', e.target.checked);
+        });
+
+        btnManualScan.addEventListener('click', () => {
+            ipcRenderer.send('trigger-manual-scan');
+        });
+
+        btnReset.addEventListener('click', () => {
+            container.classList.remove('show');
+            obsField.innerText = "Observing...";
+            msgField.innerText = "Amdion Observer";
+            chatHistory.innerHTML = '';
+            if (isChatOpen) {
+                btnToggleChat.click(); // Close chat on reset
+            }
+        });
+
+        ipcRenderer.on('show-nudge', (event, data) => {
+            if (data.observation) {
+                obsField.innerText = `Observation: ${data.observation}`;
+            } else {
+                obsField.innerText = "";
+            }
+            msgField.innerText = data.message;
+            btnAction.innerText = data.actionText || 'Execute';
+            container.classList.add('show');
+        });
+
+        ipcRenderer.on('set-scanning-state', (event, isScanning) => {
+            if (isScanning) {
+                scanIndicator.classList.add('scanning');
+            } else {
+                scanIndicator.classList.remove('scanning');
+            }
+        });
+
+        ipcRenderer.on('hide-nudge', () => {
+            container.classList.remove('show');
+        });
+
+        btnDismiss.addEventListener('click', () => {
+            container.classList.remove('show');
+        });
+
+        btnAction.addEventListener('click', () => {
+            container.classList.remove('show');
+            ipcRenderer.send('nudge-action-clicked');
+        });
+
+        // Chat Logic
+        function addChatMessage(sender, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `chat-message ${sender}`;
+            msgDiv.innerText = text;
+            chatHistory.appendChild(msgDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function sendChat() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+            
+            addChatMessage('user', text);
+            chatInput.value = '';
+            
+            ipcRenderer.send('send-chat-message', text);
+            addChatMessage('amdion', 'Thinking...');
+        }
+
+        btnSendChat.addEventListener('click', sendChat);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChat();
+        });
+
+        ipcRenderer.on('chat-response', (event, response) => {
+            const msgs = chatHistory.querySelectorAll('.chat-message.amdion');
+            if (msgs.length > 0 && msgs[msgs.length - 1].innerText === 'Thinking...') {
+                msgs[msgs.length - 1].innerText = response;
+            } else {
+                addChatMessage('amdion', response);
+            }
+        });
+    </script>
+</body>
+</html>
