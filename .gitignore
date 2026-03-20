@@ -7,3 +7,4 @@ out/
 journals/
 package-lock.json
 Thumbs.db
+src-tauri/target/
