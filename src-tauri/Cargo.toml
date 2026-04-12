@@ -11,7 +11,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["unstable"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
@@ -21,3 +21,7 @@ tokio = { version = "1", features = ["full"] }
 base64 = "0.22"
 chrono = "0.4"
 dotenvy = "0.15"
+rusqlite = { version = "0.31", features = ["bundled"] }
+xcap = "0.9"
+url = "2"
+lazy_static = "1"

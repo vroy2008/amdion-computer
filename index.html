@@ -266,10 +266,9 @@
     }
 
     .content-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 64px;
       width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
     }
 
     .section-title {
@@ -1045,88 +1044,7 @@
             </div>
           </div>
 
-          <div class="tasks-notes">
-            <div class="tasks-header">
-              <button class="tab-btn active" data-tab="tasks">Tasks</button>
-              <button class="tab-btn" data-tab="notes">Notes</button>
-            </div>
 
-            <div id="tasks-panel">
-              <p style="font-size: 14px; color: var(--muted); margin-bottom: 16px;">What do you want to accomplish today?</p>
-              <div class="task-item">
-                <div class="task-checkbox" data-task="1"></div>
-                <input type="text" class="task-input" placeholder="Task 1" data-task="1">
-              </div>
-              <div class="task-item">
-                <div class="task-checkbox" data-task="2"></div>
-                <input type="text" class="task-input" placeholder="Task 2" data-task="2">
-              </div>
-              <div class="task-item">
-                <div class="task-checkbox" data-task="3"></div>
-                <input type="text" class="task-input" placeholder="Task 3" data-task="3">
-              </div>
-            </div>
-
-            <div id="notes-panel" class="hidden">
-              <textarea class="notes-area" placeholder="Jot down your thoughts..."></textarea>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <!-- Journal Timeline -->
-      <div class="journal-section">
-        <div class="journal-header">
-          <h2>◉ Today's Journal</h2>
-          <button class="journal-toggle-btn" id="btn-journal-toggle">
-            <span class="rec-dot"></span>
-            <span id="journal-toggle-label">Record</span>
-          </button>
-          <button class="journal-toggle-btn" id="btn-review-journal" style="margin-left:6px;">
-            ◈ Review
-          </button>
-        </div>
-        <div class="journal-timeline" id="journal-timeline">
-          <div class="journal-empty">Toggle recording to start tracking your day</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Journal Review Overlay -->
-    <div class="journal-review-overlay" id="journal-review-overlay">
-      <div class="jr-header">
-        <h1>◉ Journal Review</h1>
-        <button class="jr-close" id="jr-close">← Back to Home</button>
-      </div>
-      <div class="jr-date-nav">
-        <button id="jr-prev-date">◀ Prev</button>
-        <span class="jr-date-label" id="jr-date-label">--</span>
-        <button id="jr-next-date">Next ▶</button>
-      </div>
-      <div class="jr-content">
-        <div class="jr-timeline-section">
-          <h3 class="jr-section-title">▸ Activity Timeline</h3>
-          <div class="jr-full-timeline" id="jr-full-timeline"></div>
-        </div>
-        <div class="jr-graph-section">
-          <h3 class="jr-section-title">◎ Topic Graph</h3>
-          <canvas id="topic-graph-canvas" width="500" height="400"></canvas>
-          <div class="jr-graph-actions">
-            <button class="jr-graph-btn" id="jr-gen-graph">◆ Generate Graph</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Nudge Popup -->
-    <div id="nudge-container">
-      <div id="nudge-observation"></div>
-      <div id="nudge-message"></div>
-      <div id="nudge-actions">
-        <button id="btn-nudge-dismiss" class="btn">Dismiss</button>
-        <button id="btn-nudge-action" class="btn primary">Action</button>
-      </div>
-    </div>
 
     <!-- Add App Modal -->
     <div class="modal-overlay" id="add-app-modal">
@@ -1408,26 +1326,7 @@
     updateTime();
     setInterval(updateTime, 1000);
 
-    // Tab switching (tasks/notes)
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const tab = btn.dataset.tab;
-        document.getElementById('tasks-panel').classList.toggle('hidden', tab !== 'tasks');
-        document.getElementById('notes-panel').classList.toggle('hidden', tab !== 'notes');
-      };
-    });
 
-    // Task checkboxes
-    document.querySelectorAll('.task-checkbox').forEach(checkbox => {
-      checkbox.onclick = () => {
-        checkbox.classList.toggle('checked');
-        checkbox.innerHTML = checkbox.classList.contains('checked')
-          ? '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
-          : '';
-      };
-    });
 
     // Open app via Electron API
     async function openApp(app) {
@@ -1566,28 +1465,7 @@
             addChatMessage(reply, false);
         });
 
-        // Nudges
-        const nudgeContainer = document.getElementById('nudge-container');
-        const nudgeObs = document.getElementById('nudge-observation');
-        const nudgeMsg = document.getElementById('nudge-message');
-        const nudgeBtn = document.getElementById('btn-nudge-action');
-        const nudgeDismiss = document.getElementById('btn-nudge-dismiss');
 
-        window.electronAPI.onShowNudge((analysis) => {
-            nudgeObs.textContent = analysis.observation || '';
-            nudgeMsg.textContent = analysis.message || '';
-            nudgeBtn.textContent = analysis.action || 'Execute';
-            nudgeContainer.classList.add('show');
-        });
-
-        nudgeDismiss.onclick = () => {
-            nudgeContainer.classList.remove('show');
-        };
-
-        nudgeBtn.onclick = () => {
-            console.log("Executed:", nudgeBtn.textContent);
-            nudgeContainer.classList.remove('show');
-        };
     }
 
     document.getElementById('chat-input').addEventListener('keydown', async (e) => {
@@ -1689,230 +1567,7 @@
       });
     }
 
-    // --- Journal ---
-    const journalToggleBtn = document.getElementById('btn-journal-toggle');
-    const journalToggleLabel = document.getElementById('journal-toggle-label');
-    const journalTimeline = document.getElementById('journal-timeline');
-    let isJournalRecording = false;
 
-    function renderJournalEntry(entry) {
-      const div = document.createElement('div');
-      let icon = '◻', cssClass = 'je-activity', text = '';
-      switch(entry.type) {
-        case 'activity':
-          icon = '◻'; cssClass = 'je-activity'; text = entry.summary; break;
-        case 'chat_user':
-          icon = '▹'; cssClass = 'je-chat'; text = `You: ${entry.message}`; break;
-        case 'chat_ai':
-          icon = '◆'; cssClass = 'je-chat'; text = `AI: ${entry.message.slice(0,80)}${entry.message.length > 80 ? '...' : ''}`; break;
-        case 'agent_task':
-          icon = '◎'; cssClass = 'je-agent'; text = `Agent: ${entry.task}`; break;
-        case 'journal_start':
-          icon = '●'; cssClass = 'je-system'; text = 'Recording started'; break;
-        case 'journal_stop':
-          icon = '■'; cssClass = 'je-system'; text = 'Recording stopped'; break;
-        default:
-          icon = '▪'; text = entry.summary || entry.message || ''; break;
-      }
-      div.className = `journal-entry ${cssClass}`;
-      div.innerHTML = `<span class="je-time">${entry.time}</span><span class="je-icon">${icon}</span><span class="je-text">${text}</span>`;
-      return div;
-    }
-
-    // Load today's journal on startup
-    if (window.electronAPI && window.electronAPI.getJournal) {
-      window.electronAPI.getJournal().then(entries => {
-        if (entries && entries.length > 0) {
-          journalTimeline.innerHTML = '';
-          entries.forEach(e => journalTimeline.appendChild(renderJournalEntry(e)));
-          journalTimeline.scrollTop = journalTimeline.scrollHeight;
-        }
-      });
-    }
-
-    // Toggle recording
-    if (journalToggleBtn) {
-      journalToggleBtn.onclick = () => {
-        isJournalRecording = !isJournalRecording;
-        journalToggleBtn.classList.toggle('recording', isJournalRecording);
-        journalToggleLabel.textContent = isJournalRecording ? 'Recording...' : 'Record';
-        if (window.electronAPI && window.electronAPI.setJournalState) {
-          window.electronAPI.setJournalState(isJournalRecording);
-        }
-      };
-    }
-
-    // Stream new journal entries
-    if (window.electronAPI && window.electronAPI.onJournalUpdate) {
-      window.electronAPI.onJournalUpdate((entry) => {
-        const emptyMsg = journalTimeline.querySelector('.journal-empty');
-        if (emptyMsg) emptyMsg.remove();
-        journalTimeline.appendChild(renderJournalEntry(entry));
-        journalTimeline.scrollTop = journalTimeline.scrollHeight;
-      });
-    }
-
-    // --- Journal Review Panel ---
-    const reviewOverlay = document.getElementById('journal-review-overlay');
-    const jrClose = document.getElementById('jr-close');
-    const jrDateLabel = document.getElementById('jr-date-label');
-    const jrPrev = document.getElementById('jr-prev-date');
-    const jrNext = document.getElementById('jr-next-date');
-    const jrTimeline = document.getElementById('jr-full-timeline');
-    const jrGenGraph = document.getElementById('jr-gen-graph');
-    const graphCanvas = document.getElementById('topic-graph-canvas');
-    let jrDates = [];
-    let jrDateIdx = 0;
-    let graphData = null;
-    let graphAnimId = null;
-
-    document.getElementById('btn-review-journal').onclick = async () => {
-      if (window.electronAPI && window.electronAPI.getJournalDates) {
-        jrDates = await window.electronAPI.getJournalDates();
-        jrDateIdx = 0;
-        if (jrDates.length > 0) {
-          await loadJournalDate(jrDates[0]);
-        } else {
-          jrDateLabel.textContent = 'No journal entries yet';
-          jrTimeline.innerHTML = '<div class="journal-empty">No entries found</div>';
-        }
-        reviewOverlay.classList.add('show');
-      }
-    };
-
-    jrClose.onclick = () => { reviewOverlay.classList.remove('show'); if (graphAnimId) cancelAnimationFrame(graphAnimId); };
-    jrPrev.onclick = async () => { if (jrDateIdx < jrDates.length - 1) { jrDateIdx++; await loadJournalDate(jrDates[jrDateIdx]); } };
-    jrNext.onclick = async () => { if (jrDateIdx > 0) { jrDateIdx--; await loadJournalDate(jrDates[jrDateIdx]); } };
-
-    async function loadJournalDate(date) {
-      jrDateLabel.textContent = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const entries = await window.electronAPI.getJournalByDate(date);
-      jrTimeline.innerHTML = '';
-      if (entries.length === 0) {
-        jrTimeline.innerHTML = '<div class="journal-empty">No entries for this date</div>';
-      } else {
-        entries.forEach(e => jrTimeline.appendChild(renderJournalEntry(e)));
-      }
-      // Clear graph
-      graphData = null;
-      const ctx = graphCanvas.getContext('2d');
-      ctx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
-      ctx.fillStyle = '#888';
-      ctx.font = '13px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Click "Generate Graph" to visualize topics', graphCanvas.width / 2, graphCanvas.height / 2);
-    }
-
-    jrGenGraph.onclick = async () => {
-      const date = jrDates[jrDateIdx];
-      if (!date) return;
-      jrGenGraph.classList.add('loading');
-      jrGenGraph.textContent = '◇ Analyzing...';
-      try {
-        graphData = await window.electronAPI.getJournalGraph(date);
-        renderForceGraph(graphData);
-      } catch(e) { console.error(e); }
-      jrGenGraph.classList.remove('loading');
-      jrGenGraph.textContent = '◆ Generate Graph';
-    };
-
-    // Canvas Force-Directed Graph
-    function renderForceGraph(data) {
-      if (graphAnimId) cancelAnimationFrame(graphAnimId);
-      const canvas = graphCanvas;
-      const ctx = canvas.getContext('2d');
-      const W = canvas.width, H = canvas.height;
-
-      if (!data || !data.nodes || data.nodes.length === 0) {
-        ctx.clearRect(0, 0, W, H);
-        ctx.fillStyle = '#888'; ctx.font = '13px Inter'; ctx.textAlign = 'center';
-        ctx.fillText('No topics found', W / 2, H / 2);
-        return;
-      }
-
-      const typeColors = { app: '#3498db', topic: '#9b59b6', action: '#2ecc71', person: '#f39c12' };
-      const nodes = data.nodes.map((n, i) => ({
-        ...n, x: W/2 + (Math.random()-0.5)*200, y: H/2 + (Math.random()-0.5)*200,
-        vx: 0, vy: 0, r: 22
-      }));
-      const nodeMap = {};
-      nodes.forEach(n => nodeMap[n.id] = n);
-      const edges = data.edges.filter(e => nodeMap[e.source] && nodeMap[e.target]);
-
-      function tick() {
-        // Repulsion
-        for (let i = 0; i < nodes.length; i++) {
-          for (let j = i + 1; j < nodes.length; j++) {
-            let dx = nodes[j].x - nodes[i].x, dy = nodes[j].y - nodes[i].y;
-            let dist = Math.sqrt(dx*dx + dy*dy) || 1;
-            let force = 800 / (dist * dist);
-            let fx = dx / dist * force, fy = dy / dist * force;
-            nodes[i].vx -= fx; nodes[i].vy -= fy;
-            nodes[j].vx += fx; nodes[j].vy += fy;
-          }
-        }
-        // Attraction (edges)
-        edges.forEach(e => {
-          const a = nodeMap[e.source], b = nodeMap[e.target];
-          let dx = b.x - a.x, dy = b.y - a.y;
-          let dist = Math.sqrt(dx*dx + dy*dy) || 1;
-          let force = (dist - 100) * 0.01;
-          let fx = dx / dist * force, fy = dy / dist * force;
-          a.vx += fx; a.vy += fy;
-          b.vx -= fx; b.vy -= fy;
-        });
-        // Center gravity
-        nodes.forEach(n => {
-          n.vx += (W/2 - n.x) * 0.002;
-          n.vy += (H/2 - n.y) * 0.002;
-          n.vx *= 0.9; n.vy *= 0.9;
-          n.x += n.vx; n.y += n.vy;
-          n.x = Math.max(n.r, Math.min(W - n.r, n.x));
-          n.y = Math.max(n.r, Math.min(H - n.r, n.y));
-        });
-      }
-
-      function draw() {
-        ctx.clearRect(0, 0, W, H);
-        // Edges
-        edges.forEach(e => {
-          const a = nodeMap[e.source], b = nodeMap[e.target];
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-          ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
-          ctx.stroke();
-          // Edge label
-          if (e.label) {
-            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-            ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '9px Inter';
-            ctx.textAlign = 'center'; ctx.fillText(e.label, mx, my - 4);
-          }
-        });
-        // Nodes
-        nodes.forEach(n => {
-          const col = typeColors[n.type] || '#888';
-          // Glow
-          ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 4, 0, Math.PI * 2);
-          ctx.fillStyle = col + '22'; ctx.fill();
-          // Circle
-          ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-          ctx.fillStyle = col + '44'; ctx.strokeStyle = col; ctx.lineWidth = 2;
-          ctx.fill(); ctx.stroke();
-          // Label
-          ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Inter';
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(n.label.length > 12 ? n.label.slice(0,11) + '…' : n.label, n.x, n.y);
-        });
-      }
-
-      function animate() {
-        tick(); draw();
-        graphAnimId = requestAnimationFrame(animate);
-      }
-      animate();
-      // Stop after 5 seconds to save CPU
-      setTimeout(() => { if (graphAnimId) cancelAnimationFrame(graphAnimId); draw(); }, 5000);
-    }
 
     // --- Voice Input (MediaRecorder + Gemini Transcription) ---
     const micBtn = document.getElementById('btn-mic');

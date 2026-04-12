@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, WebviewUrl, LogicalPosition, LogicalSize};
 
 // ============================================================
 // State
@@ -362,8 +362,12 @@ fn clean_json_response(text: &str) -> &str {
 }
 
 // ============================================================
-// Tauri Commands — Window / Tab Management
+// Tauri Commands — Window / Tab Management (Embedded Webviews)
 // ============================================================
+
+const SIDEBAR_WIDTH: f64 = 250.0;
+const SIDEBAR_COLLAPSED_WIDTH: f64 = 60.0;
+const RIGHT_SIDEBAR_WIDTH: f64 = 300.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAppData {
@@ -372,12 +376,44 @@ pub struct OpenAppData {
     pub url: String,
 }
 
+/// Compute the position and size for embedded webviews based on sidebar state.
+fn compute_content_bounds(app: &tauri::AppHandle, state_data: &AppStateData) -> (f64, f64, f64, f64) {
+    let sidebar_w = if state_data.sidebar_collapsed { SIDEBAR_COLLAPSED_WIDTH } else { SIDEBAR_WIDTH };
+    let right_w = if state_data.right_sidebar_hidden { 0.0 } else { RIGHT_SIDEBAR_WIDTH };
+
+    if let Some(win) = app.get_webview_window("main") {
+        if let Ok(size) = win.inner_size() {
+            let w = size.width as f64 - sidebar_w - right_w;
+            let h = size.height as f64;
+            return (sidebar_w, 0.0, w.max(100.0), h.max(100.0));
+        }
+    }
+    // Fallback
+    (sidebar_w, 0.0, 900.0, 800.0)
+}
+
+/// Reposition all visible embedded webviews (call after sidebar toggle or window resize).
+fn reposition_webviews(app: &tauri::AppHandle, state_data: &AppStateData) {
+    let (x, y, w, h) = compute_content_bounds(app, state_data);
+    for tab in &state_data.active_tabs {
+        let label = format!("app_{}", tab.id);
+        if let Some(wv) = app.get_webview(&label) {
+            let _ = wv.set_position(LogicalPosition::new(x, y));
+            let _ = wv.set_size(LogicalSize::new(w, h));
+        }
+    }
+}
+
 #[tauri::command]
 async fn open_app(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     app_data: OpenAppData,
 ) -> Result<AppStateData, String> {
+    let label = format!("app_{}", app_data.id);
+    let url: tauri::Url = app_data.url.parse::<tauri::Url>().map_err(|e| e.to_string())?;
+
+    // Update state
     {
         let mut s = state.data.lock().unwrap();
         if !s.active_tabs.iter().any(|t| t.id == app_data.id) {
@@ -391,28 +427,41 @@ async fn open_app(
         s.is_home = false;
     }
 
-    // Open in a new webview window
-    let label = format!("app_{}", app_data.id);
-    let url: tauri::Url = app_data.url.parse::<tauri::Url>().map_err(|e| e.to_string())?;
-
-    // Close existing window with same label if any
-    if let Some(existing) = app.get_webview_window(&label) {
-        let _ = existing.close();
+    // Hide all existing embedded webviews
+    {
+        let s = state.data.lock().unwrap();
+        for tab in &s.active_tabs {
+            if tab.id != app_data.id {
+                let other_label = format!("app_{}", tab.id);
+                if let Some(wv) = app.get_webview(&other_label) {
+                    let _ = wv.hide();
+                }
+            }
+        }
     }
 
-    let _ = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url))
-        .title(&app_data.name)
-        .inner_size(1200.0, 800.0)
-        .decorations(true)
-        .build()
-        .map_err(|e| e.to_string())?;
+    // Check if webview already exists (re-show it)
+    if let Some(existing) = app.get_webview(&label) {
+        let _ = existing.show();
+    } else {
+        // Create new embedded webview as child of main window
+        let main_window = app.get_window("main").ok_or("No main window")?;
+        let (x, y, w, h) = {
+            let s = state.data.lock().unwrap();
+            compute_content_bounds(&app, &s)
+        };
+
+        let _webview = main_window.add_child(
+            tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(url))
+                .auto_resize(),
+            LogicalPosition::new(x, y),
+            LogicalSize::new(w, h),
+        ).map_err(|e| e.to_string())?;
+    }
 
     let s = state.data.lock().unwrap();
     let data = s.clone();
-
-    // Emit state update to main window
     let _ = app.emit("state-update", &data);
-
     Ok(data)
 }
 
@@ -424,16 +473,23 @@ fn switch_tab(
 ) -> Result<(), String> {
     {
         let mut s = state.data.lock().unwrap();
-        if s.active_tabs.iter().any(|t| t.id == tab_id) {
-            s.active_tab_id = Some(tab_id.clone());
-            s.is_home = false;
+        if !s.active_tabs.iter().any(|t| t.id == tab_id) {
+            return Ok(()); // Tab doesn't exist
         }
-    }
-
-    // Focus the corresponding window
-    let label = format!("app_{}", tab_id);
-    if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.set_focus();
+        // Hide all webviews
+        for tab in &s.active_tabs {
+            let label = format!("app_{}", tab.id);
+            if let Some(wv) = app.get_webview(&label) {
+                let _ = wv.hide();
+            }
+        }
+        // Show the target webview
+        let label = format!("app_{}", tab_id);
+        if let Some(wv) = app.get_webview(&label) {
+            let _ = wv.show();
+        }
+        s.active_tab_id = Some(tab_id);
+        s.is_home = false;
     }
 
     let s = state.data.lock().unwrap();
@@ -447,10 +503,10 @@ fn close_tab(
     state: tauri::State<'_, AppState>,
     tab_id: String,
 ) -> Result<(), String> {
-    // Close the window
+    // Destroy the embedded webview
     let label = format!("app_{}", tab_id);
-    if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.close();
+    if let Some(wv) = app.get_webview(&label) {
+        let _ = wv.close();
     }
 
     {
@@ -458,6 +514,11 @@ fn close_tab(
         s.active_tabs.retain(|t| t.id != tab_id);
         if s.active_tab_id.as_deref() == Some(&tab_id) {
             if let Some(last) = s.active_tabs.last() {
+                // Show the last remaining tab
+                let last_label = format!("app_{}", last.id);
+                if let Some(wv) = app.get_webview(&last_label) {
+                    let _ = wv.show();
+                }
                 s.active_tab_id = Some(last.id.clone());
             } else {
                 s.active_tab_id = None;
@@ -478,6 +539,13 @@ fn go_home(
 ) -> Result<(), String> {
     {
         let mut s = state.data.lock().unwrap();
+        // Hide all embedded webviews
+        for tab in &s.active_tabs {
+            let label = format!("app_{}", tab.id);
+            if let Some(wv) = app.get_webview(&label) {
+                let _ = wv.hide();
+            }
+        }
         s.active_tab_id = None;
         s.is_home = true;
     }
@@ -496,6 +564,8 @@ fn toggle_sidebar(
         let mut s = state.data.lock().unwrap();
         s.sidebar_collapsed = !s.sidebar_collapsed;
         collapsed = s.sidebar_collapsed;
+        // Reposition embedded webviews for new sidebar width
+        reposition_webviews(&app, &s);
     }
     let s = state.data.lock().unwrap();
     let _ = app.emit("state-update", &*s);
@@ -512,6 +582,8 @@ fn toggle_right_sidebar(
         let mut s = state.data.lock().unwrap();
         s.right_sidebar_hidden = !s.right_sidebar_hidden;
         hidden = s.right_sidebar_hidden;
+        // Reposition embedded webviews for new right sidebar width
+        reposition_webviews(&app, &s);
     }
     let s = state.data.lock().unwrap();
     let _ = app.emit("state-update", &*s);
