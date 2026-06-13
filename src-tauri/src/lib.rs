@@ -66,10 +66,14 @@ fn show_panel_under(win: &tauri::WebviewWindow, anchor_x: f64, anchor_y: f64) {
         let w = size.width as f64;
         let mut x = anchor_x - w / 2.0;
         let y = anchor_y + 6.0;
+        // Anchor on the monitor that contains the tray icon (where the user
+        // clicked), not the window's current monitor — otherwise the panel
+        // gets clamped back onto the primary display on a multi-monitor setup.
         let monitor = win
-            .current_monitor()
+            .monitor_from_point(anchor_x, anchor_y)
             .ok()
             .flatten()
+            .or_else(|| win.current_monitor().ok().flatten())
             .or_else(|| win.primary_monitor().ok().flatten());
         if let Some(m) = monitor {
             let left = m.position().x as f64;
