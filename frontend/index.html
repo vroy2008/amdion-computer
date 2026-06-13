@@ -402,6 +402,11 @@
     let config = null;
     let state = { intent: null, sessionStartMs: Date.now() };
     let tweaks = [];
+    // First sensed event of the local day (from the Observer summary). Anchors
+    // the home "time on computer" so it reflects real time today and survives
+    // app restarts, instead of resetting to this process's start. Null until
+    // the sensing engine has logged something today.
+    let computerSinceMs = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -421,7 +426,9 @@
       return 'Good evening.';
     }
     function renderUptime() {
-      $('uptime').textContent = `On your computer for ${fmtUptime(state.sessionStartMs)} this session`;
+      const since = computerSinceMs || state.sessionStartMs;
+      const suffix = computerSinceMs ? 'today' : 'this session';
+      $('uptime').textContent = `On your computer for ${fmtUptime(since)} ${suffix}`;
     }
 
     // ── Intent ──
@@ -712,6 +719,13 @@
         if (!api) { showBootError('bridge not loaded (typeof __TAURI__ = ' + (typeof window.__TAURI__) + ')'); return; }
         config = await api.getConfig();
         state = await api.getState();
+
+        // Anchor the home uptime to the first sensed event of the day (real
+        // time on computer), falling back to the process start until then.
+        try {
+          const summary = await api.getDailySummary();
+          if (summary && summary.timeOnComputerMs > 0) computerSinceMs = Date.now() - summary.timeOnComputerMs;
+        } catch (_) {}
 
         wireEvents();
         renderHome();
