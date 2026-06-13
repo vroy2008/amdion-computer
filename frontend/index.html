@@ -60,12 +60,18 @@
     }
     .icon-btn:hover { background: var(--border); color: var(--fg); }
 
-    input[type=text], input[type=password], input[type=number], select {
+    input[type=text], input[type=password], input[type=number], select, textarea {
       background: #1c1c1c; border: 1px solid var(--border); border-radius: 8px;
       color: var(--fg); padding: 9px 11px; font-size: 13px; font-family: inherit; width: 100%;
     }
-    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 56px; line-height: 1.5; }
     label.field { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+
+    /* Connection status pill */
+    .pill { font-size: 11px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); white-space: nowrap; }
+    .pill.on { color: var(--ok); border-color: rgba(46,204,113,0.5); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: var(--border); padding: 1px 5px; border-radius: 4px; }
 
     /* Top bar (drag region) */
     #topbar {
@@ -153,7 +159,7 @@
     #onboarding .sheet-body { display: flex; flex-direction: column; }
     #onboarding .ob-step { width: 100%; max-width: 440px; margin: auto; }
     #onboarding .ob-step[data-step="0"],
-    #onboarding .ob-step[data-step="2"] { text-align: center; }
+    #onboarding .ob-step[data-step="3"] { text-align: center; }
     .ob-welcome { line-height: 1.7; font-size: 15px; color: #d6d6d6; }
     .ob-welcome b { color: var(--fg); font-weight: 500; }
 
@@ -209,7 +215,7 @@
       <div class="section">
         <h3>Focus</h3>
         <div class="row">
-          <div><div class="label-main">Friction</div><div class="label-sub">How firmly to push back on distractions (Step 2).</div></div>
+          <div><div class="label-main">Friction</div><div class="label-sub"><b>Off</b> just watches · <b>Soft</b> nudges · <b>Lock-In</b> blocks, in your real Chrome.</div></div>
           <div class="seg" id="seg-friction">
             <button data-v="off">Off</button>
             <button data-v="soft">Soft</button>
@@ -219,6 +225,22 @@
         <div class="row">
           <div><div class="label-main">Session greeting</div><div class="label-sub">Offer to set an intent each new session.</div></div>
           <button class="toggle" id="toggle-greeting"></button>
+        </div>
+        <div style="margin-top:4px;">
+          <label class="field">Block list — your distractions, one per line (on top of the built-ins)</label>
+          <textarea id="inp-blocklist" rows="3" placeholder="reddit.com&#10;news.example.com"></textarea>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Chrome connection</h3>
+        <div class="row">
+          <div><div class="label-main">Companion extension</div><div class="label-sub">Reports activity and applies friction in your real Chrome. Data stays on your device.</div></div>
+          <span class="pill" id="ext-status">checking…</span>
+        </div>
+        <div class="muted" style="font-size:11px; line-height:1.7;">
+          Not connected? In Chrome open <code>chrome://extensions</code>, turn on <b>Developer mode</b>,
+          click <b>Load unpacked</b>, and choose Amdion's <code>extension</code> folder.
         </div>
       </div>
 
@@ -285,8 +307,25 @@
         </div>
       </div>
 
-      <!-- Step 2: done -->
+      <!-- Step 2: connect Chrome -->
       <div class="ob-step hidden" data-step="2">
+        <div class="muted" style="font-size:13px; margin-bottom:14px; line-height:1.6;">
+          Amdion works through your <b>real Chrome</b> — a companion extension keeps your profile, logins, and extensions intact, and everything it sees stays on your device.
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+          <span class="pill" id="ob-ext-status">checking…</span>
+          <span class="muted" style="font-size:12px;">updates live once it connects</span>
+        </div>
+        <ol class="tweak-steps" style="font-size:12px;">
+          <li>Open <code>chrome://extensions</code> in Chrome</li>
+          <li>Turn on <b>Developer mode</b> (top-right)</li>
+          <li>Click <b>Load unpacked</b> → choose Amdion's <code>extension</code> folder</li>
+        </ol>
+        <p class="muted" style="font-size:11px; margin-top:12px;">You can skip this and connect later from Settings.</p>
+      </div>
+
+      <!-- Step 3: done -->
+      <div class="ob-step hidden" data-step="3">
         <p class="ob-welcome">You're set. <b>Amdion is now in your menu bar</b> — click the icon or press ⌘⇧Space whenever you want it.</p>
         <p class="ob-welcome" style="margin-top:12px;">More tuning, your API key, and focus settings live behind the gear.</p>
       </div>
@@ -346,6 +385,25 @@
       renderHome();
     }
 
+    // ── Chrome connection (settings + onboarding pills) ──
+    function renderExtStatus() {
+      const connected = !!(state && state.extensionConnected);
+      ['ext-status', 'ob-ext-status'].forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.textContent = connected ? 'Connected' : 'Not connected';
+        el.classList.toggle('on', connected);
+      });
+    }
+
+    // Normalize a textarea of domains: strip scheme/path/www, lowercase, dedupe.
+    function parseBlockList(text) {
+      return [...new Set((text || '')
+        .split(/[\n,]/)
+        .map(s => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''))
+        .filter(Boolean))];
+    }
+
     // ── Mac tuning (shared by settings + onboarding) ──
     function renderTweaks(container, opts = {}) {
       container.innerHTML = '';
@@ -402,7 +460,9 @@
       $('inp-session').value = config.sessionGapMins;
       $('inp-apikey').value = config.apiKey || '';
       $('inp-model').value = config.model || '';
+      $('inp-blocklist').value = (config.blockList || []).join('\n');
       renderTweaks($('settings-tweaks'), { selectable: false });
+      renderExtStatus();
     }
     async function openSettings() {
       await refreshTweaks();
@@ -417,6 +477,7 @@
         sessionGapMins: parseInt($('inp-session').value, 10) || 30,
         apiKey: $('inp-apikey').value.trim(),
         model: $('inp-model').value.trim(),
+        blockList: parseBlockList($('inp-blocklist').value),
       });
       $('settings').classList.add('hidden');
       renderHome();
@@ -424,7 +485,7 @@
 
     // ── Onboarding (welcome → optional tune → done) ──
     let obStep = 0;
-    const OB_TITLES = ['WELCOME', 'TUNE YOUR MAC', 'ALL SET'];
+    const OB_TITLES = ['WELCOME', 'TUNE YOUR MAC', 'CONNECT CHROME', 'ALL SET'];
     function renderObStep() {
       document.querySelectorAll('#onboarding .ob-step').forEach(el => {
         el.classList.toggle('hidden', parseInt(el.dataset.step, 10) !== obStep);
@@ -434,6 +495,7 @@
       $('ob-back').style.visibility = obStep === 0 ? 'hidden' : 'visible';
       $('ob-next').textContent = obStep === OB_TITLES.length - 1 ? 'Finish' : 'Next';
       if (obStep === 1) renderTweaks($('ob-tweaks'), { selectable: true, scriptableOnly: true });
+      if (obStep === 2) renderExtStatus();
     }
     async function startOnboarding() {
       await refreshTweaks();
@@ -520,8 +582,9 @@
 
         wireEvents();
         renderHome();
+        renderExtStatus();
 
-        api.onStateUpdate((s) => { state = s; renderHome(); });
+        api.onStateUpdate((s) => { state = s; renderHome(); renderExtStatus(); });
         setInterval(renderUptime, 30000);
 
         if (!config.onboardingComplete) startOnboarding();

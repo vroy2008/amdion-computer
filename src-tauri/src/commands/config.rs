@@ -1,6 +1,8 @@
 // Config commands.
 
+use crate::bridge_ws::friction_message;
 use crate::config::{read_config, write_config, AppConfig};
+use crate::state::AppState;
 use serde::Deserialize;
 
 #[tauri::command]
@@ -23,11 +25,19 @@ pub struct ConfigUpdate {
     pub break_threshold_mins: Option<u32>,
     #[serde(rename = "sessionGapMins")]
     pub session_gap_mins: Option<u32>,
+    #[serde(rename = "blockList")]
+    pub block_list: Option<Vec<String>>,
 }
 
-/// Partial update: only the fields present in `config` are changed.
+/// Partial update: only the fields present in `config` are changed. After
+/// writing, the current friction config is pushed to the connected extension so
+/// Chrome's behavior tracks the settings immediately (no-op if nothing's
+/// connected). `state` is injected by Tauri — the frontend call is unchanged.
 #[tauri::command]
-pub fn save_config(config: ConfigUpdate) -> Result<AppConfig, String> {
+pub fn save_config(
+    state: tauri::State<'_, AppState>,
+    config: ConfigUpdate,
+) -> Result<AppConfig, String> {
     let mut current = read_config();
     if let Some(key) = config.api_key {
         current.api_key = key;
@@ -50,6 +60,10 @@ pub fn save_config(config: ConfigUpdate) -> Result<AppConfig, String> {
     if let Some(mins) = config.session_gap_mins {
         current.session_gap_mins = mins;
     }
+    if let Some(list) = config.block_list {
+        current.block_list = list;
+    }
     write_config(&current);
+    let _ = state.bridge_tx.send(friction_message());
     Ok(current)
 }

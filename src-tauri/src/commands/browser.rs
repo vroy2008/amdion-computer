@@ -1,15 +1,17 @@
 // Tab / navigation commands.
 //
-// NOTE (Step 0): the old embedded-webview implementation (Tauri `add_child` /
-// show / hide / close / reposition) has been removed — Amdion no longer embeds a
-// browser. These commands now only track UI state and emit `state-update`.
+// These drive the user's REAL Chrome via the companion extension over the
+// localhost WebSocket bridge (Step 2) — Amdion never embeds a browser. When the
+// extension isn't connected, `open_app` falls back to AppleScript so opening a
+// URL still works; tab focus/close have no AppleScript path and no-op.
 //
-// TODO(Step 2): re-point `open_app` / `switch_tab` / `close_tab` / `go_home` to
-// drive the user's REAL Chrome via the companion extension over the localhost
-// WebSocket bridge (AppleScript fallback). See docs/IMPLEMENTATION_PLAN.md.
+// They also keep the small local "open apps" bookkeeping the panel uses and emit
+// `state-update`, and they keep stable names/signatures so the future agent can
+// call them as the typed action surface.
 
 use crate::state::{AppState, AppStateData, TabInfo};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::Ordering;
 use tauri::Emitter;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +25,27 @@ fn emit_state(app: &tauri::AppHandle, state: &tauri::State<'_, AppState>) -> App
     let data = state.data.lock().unwrap().clone();
     let _ = app.emit("state-update", &data);
     data
+}
+
+/// Push an App→Ext command to the connected extension(s). Returns `false` when
+/// nothing is connected, so the caller can decide on a fallback.
+fn push_to_ext(state: &tauri::State<'_, AppState>, json: String) -> bool {
+    if state.ext_connections.load(Ordering::SeqCst) == 0 {
+        return false;
+    }
+    state.bridge_tx.send(json).is_ok()
+}
+
+/// Open a URL in the user's Chrome via AppleScript — the no-extension fallback.
+/// The URL is sanitized so it can't break out of the AppleScript string literal.
+fn applescript_open(url: &str) {
+    let safe = url.replace('\\', "").replace('"', "%22");
+    let script = format!(
+        "tell application \"Google Chrome\" to open location \"{safe}\""
+    );
+    let _ = std::process::Command::new("osascript")
+        .args(["-e", &script])
+        .status();
 }
 
 #[tauri::command]
@@ -43,6 +66,15 @@ pub fn open_app(
         s.active_tab_id = Some(app_data.id.clone());
         s.is_home = false;
     }
+    // Drive the real Chrome: over the bridge when the extension is connected,
+    // else via AppleScript so the URL still opens.
+    let cmd = serde_json::json!({
+        "type": "open_tab",
+        "payload": { "url": app_data.url },
+    });
+    if !push_to_ext(&state, cmd.to_string()) {
+        applescript_open(&app_data.url);
+    }
     Ok(emit_state(&app, &state))
 }
 
@@ -57,9 +89,15 @@ pub fn switch_tab(
         if !s.active_tabs.iter().any(|t| t.id == tab_id) {
             return Ok(());
         }
-        s.active_tab_id = Some(tab_id);
+        s.active_tab_id = Some(tab_id.clone());
         s.is_home = false;
     }
+    // TODO(Step 3): `tab_id` is Amdion's internal id; the extension keys on
+    // Chrome's numeric tabId. Correct today only for tabs the extension itself
+    // tracked — the id↔tabId map lands with the Step-3 event store. No-ops
+    // gracefully when the extension is disconnected.
+    let cmd = serde_json::json!({ "type": "focus_tab", "payload": { "tabId": tab_id } });
+    push_to_ext(&state, cmd.to_string());
     emit_state(&app, &state);
     Ok(())
 }
@@ -82,6 +120,9 @@ pub fn close_tab(
             }
         }
     }
+    // TODO(Step 3): same id caveat as `switch_tab`. No-ops when disconnected.
+    let cmd = serde_json::json!({ "type": "close_tab", "payload": { "tabId": tab_id } });
+    push_to_ext(&state, cmd.to_string());
     emit_state(&app, &state);
     Ok(())
 }
