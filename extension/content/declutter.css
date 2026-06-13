@@ -1,0 +1,18 @@
+/* Amdion declutter — quiet a couple of high-pull surfaces. This is the example
+   "decorate" layer; it's reversible by disabling the extension. Selectors are
+   best-effort and may drift as these sites change their markup. */
+
+/* YouTube — hide Shorts shelves (endless short-form is a classic attention trap). */
+ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),
+ytd-reel-shelf-renderer,
+ytd-guide-entry-renderer:has(a[title="Shorts"]),
+ytd-mini-guide-entry-renderer[aria-label="Shorts"] {
+  display: none !important;
+}
+
+/* X / Twitter — hide the "Trending"/"What's happening" and "Who to follow"
+   modules in the right column, keeping the search box. */
+[data-testid="sidebarColumn"] [aria-label="Timeline: Trending now"],
+[data-testid="sidebarColumn"] [aria-label="Who to follow"] {
+  display: none !important;
+}

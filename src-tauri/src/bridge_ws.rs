@@ -41,10 +41,12 @@ use tokio_tungstenite::tungstenite::Message;
 const PORT_MIN: u16 = 17872;
 const PORT_MAX: u16 = 17882;
 
-/// Exact `chrome-extension://<id>` origin to allow, once the extension's
-/// manifest `key` pins a stable id. `None` → accept any `chrome-extension://`
-/// origin (fine for the unpacked dev build; tightened for the Web-Store build).
-const ALLOWED_EXTENSION_ORIGIN: Option<&str> = None;
+/// Exact `chrome-extension://<id>` origin to allow. The id is pinned by the
+/// `key` in `extension/manifest.json`, so only Amdion's own companion extension
+/// can connect — not some other extension the user happens to have installed.
+/// (`None` would fall back to accepting any `chrome-extension://` origin.)
+const ALLOWED_EXTENSION_ORIGIN: Option<&str> =
+    Some("chrome-extension://kobehecgjgjgjlljidhjjlgadpdmnfbp");
 
 /// Whether the `hello` token must match. Off for the pinned-origin dev build;
 /// the hardening hook for the Web-Store build (see module docs).
@@ -142,7 +144,8 @@ async fn handle_conn(
                 if !authed {
                     if env.typ == "hello" && hello_ok(&env, &token) {
                         authed = true;
-                        conns.fetch_add(1, Ordering::SeqCst);
+                        let n = conns.fetch_add(1, Ordering::SeqCst) + 1;
+                        eprintln!("[bridge] extension connected ({n} active)");
                         broadcast_connected(&app, &conns);
                         // Configure the extension the instant it connects — the
                         // broadcast reaches our own freshly-subscribed `rx`.
@@ -161,7 +164,8 @@ async fn handle_conn(
 
     pump.abort();
     if authed {
-        conns.fetch_sub(1, Ordering::SeqCst);
+        let n = conns.fetch_sub(1, Ordering::SeqCst) - 1;
+        eprintln!("[bridge] extension disconnected ({n} active)");
         broadcast_connected(&app, &conns);
     }
 }
