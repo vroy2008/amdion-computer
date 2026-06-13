@@ -25,3 +25,8 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 xcap = "0.9"
 url = "2"
 lazy_static = "1"
+# Localhost WebSocket bridge to the Chrome extension (Step 2). Plain ws:// on
+# loopback — no TLS features.
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+rand = "0.8"

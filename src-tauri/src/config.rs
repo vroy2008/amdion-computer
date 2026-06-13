@@ -27,6 +27,12 @@ pub struct AppConfig {
     /// Idle minutes that close a session (advanced; used by Step 3 sensing).
     #[serde(rename = "sessionGapMins", default = "default_session_gap")]
     pub session_gap_mins: u32,
+
+    // ── Response / friction (Step 2) ──
+    /// User-added domains the friction layer acts on, on top of the extension's
+    /// built-in distraction list. Soft = nudge; Lock-In = block/redirect.
+    #[serde(rename = "blockList", default)]
+    pub block_list: Vec<String>,
 }
 
 fn default_model() -> String {
@@ -59,6 +65,7 @@ impl Default for AppConfig {
             onboarding_complete: false,
             break_threshold_mins: default_break_threshold(),
             session_gap_mins: default_session_gap(),
+            block_list: Vec::new(),
         }
     }
 }

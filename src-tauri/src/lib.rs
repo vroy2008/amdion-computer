@@ -5,6 +5,7 @@
 // anchored under it) or pressing ⌘⇧Space. It auto-hides when it loses focus, so
 // it stays ephemeral. First run shows the window for onboarding.
 
+mod bridge_ws;
 mod commands;
 mod config;
 mod gemini;
@@ -113,6 +114,17 @@ pub fn run() {
             // Menu-bar app: no Dock icon, no app menu.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // Host the localhost WebSocket bridge the Chrome extension connects
+            // to. Spawned on Tauri's async runtime; binds loopback only.
+            {
+                let st = app.state::<AppState>();
+                let handle = app.handle().clone();
+                let tx = st.bridge_tx.clone();
+                let token = st.bridge_token.clone();
+                let conns = st.ext_connections.clone();
+                tauri::async_runtime::spawn(bridge_ws::serve(handle, tx, token, conns));
+            }
 
             let win = app.get_webview_window("main").expect("main window missing");
 
