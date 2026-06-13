@@ -20,14 +20,42 @@ use tauri_plugin_global_shortcut::ShortcutState;
 /// Summon shortcut: toggles the panel (show+focus, or hide if already up).
 const SUMMON_SHORTCUT: &str = "CommandOrControl+Shift+Space";
 
-/// Show/hide the panel based on its current state (used by the shortcut).
-fn toggle_panel(win: &tauri::WebviewWindow) {
+/// Tray icon id, used to look the icon's screen rect back up for positioning.
+const TRAY_ID: &str = "amdion-tray";
+
+/// The point the panel should drop from for a given menu-bar icon rect:
+/// horizontally centered on the icon, vertically at its bottom edge.
+fn anchor_from_rect(rect: &tauri::Rect, scale: f64) -> (f64, f64) {
+    let pos = rect.position.to_physical::<f64>(scale);
+    let size = rect.size.to_physical::<f64>(scale);
+    (pos.x + size.width / 2.0, pos.y + size.height)
+}
+
+/// Current anchor point under the tray icon, if the platform reports its rect.
+fn tray_anchor(app: &tauri::AppHandle, scale: f64) -> Option<(f64, f64)> {
+    let rect = app.tray_by_id(TRAY_ID)?.rect().ok().flatten()?;
+    Some(anchor_from_rect(&rect, scale))
+}
+
+/// Toggle the panel for the ⌘⇧Space summon: hide if it's already up, otherwise
+/// drop it anchored under the tray icon (falling back to its last position if
+/// the tray rect is unavailable).
+fn summon_panel(app: &tauri::AppHandle) {
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
     let up = win.is_visible().unwrap_or(false) && win.is_focused().unwrap_or(false);
     if up {
         let _ = win.hide();
-    } else {
-        let _ = win.show();
-        let _ = win.set_focus();
+        return;
+    }
+    let scale = win.scale_factor().unwrap_or(1.0);
+    match tray_anchor(app, scale) {
+        Some((x, y)) => show_panel_under(&win, x, y),
+        None => {
+            let _ = win.show();
+            let _ = win.set_focus();
+        }
     }
 }
 
@@ -72,9 +100,7 @@ pub fn run() {
                     if event.state() != ShortcutState::Pressed {
                         return;
                     }
-                    if let Some(win) = app.get_webview_window("main") {
-                        toggle_panel(&win);
-                    }
+                    summon_panel(app);
                 })
                 .build(),
         )
@@ -104,10 +130,14 @@ pub fn run() {
             let open_i = MenuItemBuilder::with_id("open", "Open Amdion").build(app)?;
             let quit_i = MenuItemBuilder::with_id("quit", "Quit Amdion").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&open_i, &quit_i]).build()?;
-            let icon = app.default_window_icon().expect("default icon").clone();
 
-            TrayIconBuilder::with_id("amdion-tray")
-                .icon(icon)
+            // A monochrome template glyph so the menu-bar icon adapts to the
+            // light/dark menu bar, instead of the full-color app icon.
+            let tray_icon = tauri::include_image!("icons/tray.png");
+
+            TrayIconBuilder::with_id(TRAY_ID)
+                .icon(tray_icon)
+                .icon_as_template(true)
                 .tooltip("Amdion")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -125,7 +155,7 @@ pub fn run() {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
-                        position,
+                        rect,
                         ..
                     } = event
                     {
@@ -146,7 +176,9 @@ pub fn run() {
                             }
                             let _ = win.hide();
                         } else {
-                            show_panel_under(&win, position.x, position.y);
+                            let scale = win.scale_factor().unwrap_or(1.0);
+                            let (x, y) = anchor_from_rect(&rect, scale);
+                            show_panel_under(&win, x, y);
                         }
                     }
                 })

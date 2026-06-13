@@ -277,11 +277,7 @@ fn to_view(t: &TweakSpec) -> MacTweak {
 // `None` if the key was unset), and revert restores exactly that.
 
 fn snapshots_path() -> PathBuf {
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."));
-    exe_dir.join("tuning_snapshots.json")
+    crate::config::app_data_dir().join("tuning_snapshots.json")
 }
 
 fn read_snapshots() -> HashMap<String, Option<String>> {

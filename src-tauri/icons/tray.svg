@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Amdion bowtie/hourglass mark, monochrome for use as a macOS template
+       menu-bar icon (pure black + alpha; macOS recolors it per appearance). -->
+  <polygon points="20,16 80,16 50,50" fill="#000000"/>
+  <polygon points="20,84 80,84 50,50" fill="#000000"/>
+</svg>

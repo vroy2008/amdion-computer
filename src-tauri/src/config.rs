@@ -63,12 +63,30 @@ impl Default for AppConfig {
     }
 }
 
-fn config_path() -> PathBuf {
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+/// macOS bundle identifier — must match `tauri.conf.json`.
+const APP_IDENTIFIER: &str = "com.amdion.desktop";
+
+/// Amdion's per-user data directory:
+/// `~/Library/Application Support/com.amdion.desktop`, created on first use.
+///
+/// Config and tuning snapshots live here, not next to the executable: once
+/// Amdion is installed in `/Applications` its bundle is read-only, so the old
+/// exe-adjacent path silently failed to persist. Shared with `tuning.rs`.
+pub fn app_data_dir() -> PathBuf {
+    let base = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| {
+            home.join("Library")
+                .join("Application Support")
+                .join(APP_IDENTIFIER)
+        })
         .unwrap_or_else(|| PathBuf::from("."));
-    exe_dir.join("config.json")
+    let _ = fs::create_dir_all(&base);
+    base
+}
+
+fn config_path() -> PathBuf {
+    app_data_dir().join("config.json")
 }
 
 pub fn read_config() -> AppConfig {
