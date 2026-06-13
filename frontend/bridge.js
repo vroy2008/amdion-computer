@@ -41,14 +41,6 @@ if (window.__TAURI__) {
     getFavorites: () => invoke('get_favorites'),
     addFavorite: (appData) => invoke('add_favorite', { appData }),
 
-    // ── AI Scanning ──
-    setLoopState: (state) => invoke('set_loop_state', { stateVal: state }),
-    triggerManualScan: () => invoke('trigger_manual_scan'),
-
-    onSetScanningState: (callback) => {
-      listen('set-scanning-state', (event) => callback(event.payload));
-    },
-
     // ── Chat ──
     sendChatMessage: (message) => invoke('send_chat_message', { message }),
 
@@ -60,25 +52,24 @@ if (window.__TAURI__) {
       listen('show-nudge', (event) => callback(event.payload));
     },
 
-    // ── Agent ──
-    sendAgentAction: (task) => invoke('send_agent_action', { task }),
-    stopAgent: () => invoke('stop_agent'),
-
-    onAgentUpdate: (callback) => {
-      listen('agent-update', (event) => callback(event.payload));
-    },
-
-    // ── Journal ──
-    setJournalState: (state) => invoke('set_journal_state', { stateVal: state }),
-    getJournal: () => invoke('get_journal'),
-
-    onJournalUpdate: (callback) => {
-      listen('journal-update', (event) => callback(event.payload));
-    },
-
-    getJournalDates: () => invoke('get_journal_dates'),
-    getJournalByDate: (date) => invoke('get_journal_by_date', { date }),
-    getJournalGraph: (date) => invoke('get_journal_graph', { date }),
     transcribeAudio: (base64) => invoke('transcribe_audio', { base64Audio: base64 }),
+
+    // ── Removed in Step 0 ──────────────────────────────────────────────
+    // Screenshot scanning, the vision agent, and JSON journaling have been
+    // removed. They are replaced by the sensing engine + Observer (Steps 2-3)
+    // and a future NL agent. These no-op stubs keep the (to-be-rebuilt in
+    // Step 1) frontend from calling undefined functions during boot.
+    setLoopState: () => {},
+    triggerManualScan: () => {},
+    onSetScanningState: () => {},
+    sendAgentAction: () => {},
+    stopAgent: () => {},
+    onAgentUpdate: () => {},
+    setJournalState: () => {},
+    getJournal: () => Promise.resolve([]),
+    onJournalUpdate: () => {},
+    getJournalDates: () => Promise.resolve([]),
+    getJournalByDate: () => Promise.resolve([]),
+    getJournalGraph: () => Promise.resolve({ nodes: [], edges: [] }),
   };
 }
