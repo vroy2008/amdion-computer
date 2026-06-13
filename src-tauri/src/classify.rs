@@ -24,6 +24,7 @@
 // gap — a crashed run's open tail is closed at its last known activity rather
 // than extended. Negative/absurd deltas (clock jumps) are clamped.
 
+use serde::Serialize;
 use std::collections::HashMap;
 
 /// One raw row from the `events` table, already ordered by `(ts, id)`.
@@ -38,14 +39,16 @@ pub struct Event {
 }
 
 /// Time attributed to one app within a block (or summed across a day).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppSpan {
     pub bundle: String,
     pub name: String,
     pub ms: i64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Block {
     pub start_ts: i64,
     pub end_ts: i64,
@@ -58,7 +61,8 @@ pub struct Block {
     pub apps: Vec<AppSpan>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Session {
     pub start_ts: i64,
     pub end_ts: i64,
@@ -66,7 +70,8 @@ pub struct Session {
     pub blocks: Vec<Block>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Timeline {
     pub sessions: Vec<Session>,
     /// Number of breaks (inter-block idle gaps) in the range.

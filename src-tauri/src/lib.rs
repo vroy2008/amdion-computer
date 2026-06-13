@@ -6,9 +6,6 @@
 // it stays ephemeral. First run shows the window for onboarding.
 
 mod bridge_ws;
-// The classifier is exercised by its unit tests now; the Observer read commands
-// wire it into the live app in Step 3 (3/3).
-#[allow(dead_code)]
 mod classify;
 mod commands;
 mod config;
@@ -242,6 +239,9 @@ pub fn run() {
             // Config
             commands::config::get_config,
             commands::config::save_config,
+            // Observer (Step 3): typed daily stats over the event store
+            commands::observer::get_daily_summary,
+            commands::observer::get_sessions,
             // Mac tuning
             commands::tuning::list_mac_tweaks,
             commands::tuning::apply_mac_tuning,

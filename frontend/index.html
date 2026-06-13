@@ -170,6 +170,31 @@
       100% { transform: translate(44vw, -46vh) scale(0.04); opacity: 0; }
     }
 
+    /* Observer (Today) */
+    .obs-live { display: flex; align-items: center; gap: 9px; font-size: 13px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; }
+    .obs-live .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .obs-live .dot.active { background: var(--ok); box-shadow: 0 0 0 3px rgba(46,204,113,0.18); }
+    .obs-live .dot.break { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .obs-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .stat .v { font-size: 20px; font-weight: 300; }
+    .stat .k { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .bar-row { margin-bottom: 11px; }
+    .bar-row:last-child { margin-bottom: 0; }
+    .bar-top { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 5px; }
+    .bar-top .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-top .t { color: var(--muted); flex-shrink: 0; }
+    .bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+    .sess { padding: 11px 0; border-top: 1px solid var(--border); }
+    .sess:first-child { border-top: none; padding-top: 2px; }
+    .sess-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 7px; }
+    .sess-head .meta { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sess-track { position: relative; height: 9px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .sess-track .blk { position: absolute; top: 0; height: 100%; background: var(--accent); }
+    .sess-track .blk.open { background: var(--ok); }
+    .obs-empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+
     ::-webkit-scrollbar { width: 7px; }
     ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
   </style>
@@ -179,9 +204,14 @@
   <!-- Top bar -->
   <div id="topbar">
     <div class="logo">AMDION</div>
-    <button class="icon-btn" id="btn-settings" title="Settings">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
+    <div style="display:flex; gap:2px;">
+      <button class="icon-btn" id="btn-observer" title="Today">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="18" y1="20" x2="18" y2="10"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-settings" title="Settings">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
   </div>
 
   <!-- Home -->
@@ -273,6 +303,33 @@
     <div class="sheet-foot">
       <button class="btn ghost small" id="rerun-onboarding">Re-run setup</button>
       <button class="btn primary small" id="settings-save">Save &amp; close</button>
+    </div>
+  </div>
+
+  <!-- Observer (Today) -->
+  <div id="observer" class="sheet hidden">
+    <div class="sheet-head">
+      <div class="title">TODAY</div>
+      <button class="icon-btn" id="observer-close">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div id="obs-live" class="obs-live"><span class="dot"></span><span class="muted">No live signal yet</span></div>
+      <div class="obs-stats" id="obs-stats"></div>
+      <div class="section">
+        <h3>Time by app</h3>
+        <div id="obs-apps"></div>
+      </div>
+      <div class="section">
+        <h3>Time by site</h3>
+        <div id="obs-sites"></div>
+      </div>
+      <div class="section">
+        <h3>Sessions</h3>
+        <div id="obs-sessions"></div>
+      </div>
+      <p class="muted" style="font-size:11px; line-height:1.6; margin-top:6px;">All of this stays on your device.</p>
     </div>
   </div>
 
@@ -449,6 +506,78 @@
       tweaks.forEach(t => { t._sel = false; });
     }
 
+    // ── Observer (Today) ──
+    let lastSensing = null;
+    const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    function fmtDur(ms) {
+      const m = Math.round((ms || 0) / 60000);
+      if (m < 1) return '<1m';
+      const h = Math.floor(m / 60), mm = m % 60;
+      return h ? `${h}h ${mm}m` : `${mm}m`;
+    }
+    const fmtClock = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    function renderObsLive() {
+      const el = $('obs-live');
+      if (!el) return;
+      if (!lastSensing) { el.innerHTML = '<span class="dot"></span><span class="muted">No live signal yet</span>'; return; }
+      const active = lastSensing.state === 'active';
+      const where = active && lastSensing.app ? ` · ${esc(lastSensing.app)}` : '';
+      el.innerHTML = `<span class="dot ${active ? 'active' : 'break'}"></span><span>${active ? 'Active' + where : 'On a break'}</span>`;
+    }
+
+    function renderBars(container, items) {
+      if (!items.length) { container.innerHTML = '<div class="obs-empty">Nothing yet.</div>'; return; }
+      const max = Math.max(...items.map(i => i.ms), 1);
+      container.innerHTML = items.map(i => `
+        <div class="bar-row">
+          <div class="bar-top"><span class="name">${esc(i.label)}</span><span class="t">${fmtDur(i.ms)}</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, Math.round(i.ms / max * 100))}%"></div></div>
+        </div>`).join('');
+    }
+
+    function renderSessions(container, sessions) {
+      if (!sessions || !sessions.length) { container.innerHTML = '<div class="obs-empty">No sessions yet today.</div>'; return; }
+      container.innerHTML = sessions.map(s => {
+        const span = Math.max(1, s.endTs - s.startTs);
+        const blks = s.blocks.map(b => {
+          const left = (b.startTs - s.startTs) / span * 100;
+          const w = Math.max(1.5, (b.endTs - b.startTs) / span * 100);
+          return `<div class="blk ${b.open ? 'open' : ''}" style="left:${left}%; width:${w}%" title="${esc(b.primaryContext || '')}"></div>`;
+        }).join('');
+        const ctx = s.blocks.map(b => b.primaryContext).find(Boolean) || '';
+        const meta = `${fmtDur(s.endTs - s.startTs)}${ctx ? ' · ' + esc(ctx) : ''}`;
+        return `<div class="sess">
+          <div class="sess-head"><span>${fmtClock(s.startTs)} – ${s.open ? 'now' : fmtClock(s.endTs)}</span><span class="meta">${meta}</span></div>
+          <div class="sess-track">${blks}</div>
+        </div>`;
+      }).join('');
+    }
+
+    async function refreshObserver() {
+      renderObsLive();
+      let summary, sessions;
+      try {
+        [summary, sessions] = await Promise.all([api.getDailySummary(), api.getSessions()]);
+      } catch (e) {
+        $('obs-stats').innerHTML = `<div class="obs-empty">Couldn't load stats: ${esc((e && e.message) || e)}</div>`;
+        return;
+      }
+      $('obs-stats').innerHTML = [
+        ['On computer', fmtDur(summary.timeOnComputerMs)],
+        ['Active', fmtDur(summary.activeMs)],
+        ['Breaks', String(summary.breakCount)],
+        ['App switches', String(summary.switchCount)],
+      ].map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+      renderBars($('obs-apps'), (summary.apps || []).slice(0, 6).map(a => ({ label: a.name || a.bundle, ms: a.ms })));
+      renderBars($('obs-sites'), (summary.sites || []).slice(0, 6).map(s => ({ label: s.domain, ms: s.ms })));
+      renderSessions($('obs-sessions'), sessions);
+    }
+    async function openObserver() {
+      $('observer').classList.remove('hidden');
+      await refreshObserver();
+    }
+
     // ── Settings ──
     function setSeg(segEl, value) {
       segEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === value));
@@ -522,6 +651,8 @@
     // ── Events ──
     function wireEvents() {
       $('btn-settings').onclick = openSettings;
+      $('btn-observer').onclick = openObserver;
+      $('observer-close').onclick = () => $('observer').classList.add('hidden');
 
       $('intent-save').onclick = () => setIntent($('intent-input').value.trim());
       $('intent-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') setIntent(e.target.value.trim()); });
@@ -561,8 +692,10 @@
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
         const settingsOpen = !$('settings').classList.contains('hidden');
+        const observerOpen = !$('observer').classList.contains('hidden');
         const obOpen = !$('onboarding').classList.contains('hidden');
         if (settingsOpen) { $('settings').classList.add('hidden'); }
+        else if (observerOpen) { $('observer').classList.add('hidden'); }
         else if (obOpen) { /* keep onboarding modal */ }
         else if (api) { api.hidePanel(); }
       });
@@ -585,6 +718,13 @@
         renderExtStatus();
 
         api.onStateUpdate((s) => { state = s; renderHome(); renderExtStatus(); });
+        // Live activity signal from the sensing engine — refreshes the Observer's
+        // status line (and its stats, if it's open) when state changes.
+        api.onSensingUpdate((s) => {
+          lastSensing = s;
+          renderObsLive();
+          if (!$('observer').classList.contains('hidden')) refreshObserver();
+        });
         setInterval(renderUptime, 30000);
 
         if (!config.onboardingComplete) startOnboarding();

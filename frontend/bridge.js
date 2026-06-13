@@ -18,6 +18,11 @@ if (window.__TAURI__) {
     getConfig: () => invoke('get_config'),
     saveConfig: (config) => invoke('save_config', { config }),
 
+    // ── Observer (Step 3): daily stats over the local event store ──
+    getDailySummary: (date) => invoke('get_daily_summary', { date: date || null }),
+    getSessions: (date) => invoke('get_sessions', { date: date || null }),
+    onSensingUpdate: (cb) => listen('sensing-update', (e) => cb(e.payload)),
+
     // ── Mac tuning ──
     listMacTweaks: () => invoke('list_mac_tweaks'),
     applyMacTuning: (keys) => invoke('apply_mac_tuning', { keys }),

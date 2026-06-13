@@ -133,10 +133,12 @@ mod imp {
             }
 
             // frontmost-app change, tracked only while active
-            let mut cur_app: Option<String> = None;
+            let mut cur_bundle: Option<String> = None;
+            let mut cur_name: Option<String> = None;
             if now_active {
                 if let Some((bundle, name)) = frontmost_app() {
-                    cur_app = Some(bundle.clone());
+                    cur_bundle = Some(bundle.clone());
+                    cur_name = Some(name.clone());
                     if last_app.as_deref() != Some(bundle.as_str()) {
                         let meta = serde_json::json!({ "name": name }).to_string();
                         insert(&app, "app_focus", Some(&bundle), Some(&meta));
@@ -145,14 +147,15 @@ mod imp {
                 }
             }
 
-            // live indicator: emit only when (active, app) changes
-            let sig = (now_active, cur_app.clone().unwrap_or_default());
+            // live indicator: emit only when (active, app) changes. `app` carries
+            // the display name for the panel, not the bundle id.
+            let sig = (now_active, cur_bundle.unwrap_or_default());
             if last_sig.as_ref() != Some(&sig) {
                 let _ = app.emit(
                     "sensing-update",
                     SensingUpdate {
                         state: if now_active { "active" } else { "break" },
-                        app: cur_app,
+                        app: cur_name,
                         idle_secs: idle.round() as i64,
                     },
                 );
