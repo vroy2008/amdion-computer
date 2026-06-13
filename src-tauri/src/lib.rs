@@ -6,10 +6,15 @@
 // it stays ephemeral. First run shows the window for onboarding.
 
 mod bridge_ws;
+// The classifier is exercised by its unit tests now; the Observer read commands
+// wire it into the live app in Step 3 (3/3).
+#[allow(dead_code)]
+mod classify;
 mod commands;
 mod config;
 mod db;
 mod gemini;
+mod sensing;
 mod state;
 
 use state::AppState;
@@ -134,6 +139,10 @@ pub fn run() {
                 tauri::async_runtime::spawn(bridge_ws::serve(handle, tx, token, conns));
             }
 
+            // Sensing engine: a background thread polling OS idle + frontmost app
+            // into the same event store (macOS only; a no-op stub elsewhere).
+            sensing::start(app.handle());
+
             let win = app.get_webview_window("main").expect("main window missing");
 
             // Auto-hide when the panel loses focus (click away → vanish).
@@ -242,6 +251,14 @@ pub fn run() {
             commands::chat::send_chat_message,
             commands::chat::transcribe_audio,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Write a clean `shutdown` marker so the classifier can tell a quit
+            // from a crash (a crash leaves the trailing block open; see
+            // `sensing`/`classify`). Idempotent across ExitRequested + Exit.
+            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
+                sensing::on_exit(app);
+            }
+        });
 }

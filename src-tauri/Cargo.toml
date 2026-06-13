@@ -30,3 +30,11 @@ lazy_static = "1"
 tokio-tungstenite = "0.24"
 futures-util = "0.3"
 rand = "0.8"
+
+# Sensing engine (Step 3): frontmost-app polling via NSWorkspace. Already in the
+# lock tree transitively, so promoting it costs no extra build. Idle time uses a
+# raw CoreGraphics `extern` declared in sensing.rs (no crate exposes it). Both
+# need no Accessibility/Screen-Recording permission.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication"] }
+objc2-foundation = { version = "0.3", features = ["NSString"] }
