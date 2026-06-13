@@ -191,18 +191,32 @@ fn hello_ok(env: &Envelope, token: &str) -> bool {
     env.payload.get("token").and_then(|t| t.as_str()) == Some(token)
 }
 
-/// Route an authenticated Ext→App event. For Step 2 we surface raw browser
-/// activity to the frontend; persisting it to SQLite + merging with OS activity
-/// for the session/block/break classifier is Step 3.
+/// Route an authenticated Ext→App event: persist it to the SQLite store (Step 3)
+/// and surface it live on the `browser-activity` Tauri event. The OS sensing
+/// thread writes `'os'` rows into the same `events` table; the classifier merges
+/// both streams by timestamp.
 fn route_event(app: &AppHandle, env: &Envelope) {
     match env.typ.as_str() {
         "tab_opened" | "tab_activated" | "tab_closed" | "tab_navigated" | "idle_state" => {
-            // TODO(Step 3): persist to the event store; feed the sensing engine.
+            persist_browser_event(app, env);
             let _ = app.emit("browser-activity", env);
         }
         "ping" => {} // keepalive only
         _ => {}
     }
+}
+
+/// Append a browser event to the event store as a `'browser'`-source row: `url`
+/// is lifted out for direct querying; the whole payload rides in `meta`. `app`
+/// is left null (the OS sensing thread owns the frontmost-app/bundle column).
+fn persist_browser_event(app: &AppHandle, env: &Envelope) {
+    let Some(db) = app.try_state::<crate::db::Db>() else {
+        eprintln!("[bridge] db not ready; dropping '{}' event", env.typ);
+        return;
+    };
+    let url = env.payload.get("url").and_then(|v| v.as_str());
+    let meta = serde_json::to_string(&env.payload).ok();
+    db.insert_event(&env.typ, "browser", None, url, meta.as_deref());
 }
 
 /// Set `extension_connected` from the live count and push `state-update`, so the

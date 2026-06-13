@@ -8,6 +8,7 @@
 mod bridge_ws;
 mod commands;
 mod config;
+mod db;
 mod gemini;
 mod state;
 
@@ -114,6 +115,13 @@ pub fn run() {
             // Menu-bar app: no Dock icon, no app menu.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // Open the SQLite event store BEFORE the bridge spawns: the
+            // extension can send activity the instant it connects, and
+            // `route_event` persists it via `try_state::<Db>()` — which would
+            // silently return `None` (dropping events) if the bridge raced ahead
+            // of `manage`.
+            app.manage(db::Db::new());
 
             // Host the localhost WebSocket bridge the Chrome extension connects
             // to. Spawned on Tauri's async runtime; binds loopback only.
