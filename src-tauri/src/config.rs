@@ -1,15 +1,8 @@
-// Config + favorites: types and JSON file persistence.
+// Config: types and JSON file persistence.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FavoriteApp {
-    pub id: String,
-    pub name: String,
-    pub url: String,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -17,12 +10,43 @@ pub struct AppConfig {
     pub api_key: String,
     #[serde(default = "default_model")]
     pub model: String,
-    #[serde(default)]
-    pub favorites: Vec<FavoriteApp>,
+
+    // ── Behavior (Step 1) ──
+    /// "off" | "soft" | "lockin". Wired to the extension in Step 2.
+    #[serde(rename = "frictionLevel", default = "default_friction")]
+    pub friction_level: String,
+    /// Offer to record an intent at the start of each new session.
+    #[serde(rename = "greetingEnabled", default = "default_true")]
+    pub greeting_enabled: bool,
+    /// Set once the first-run onboarding flow has been completed.
+    #[serde(rename = "onboardingComplete", default)]
+    pub onboarding_complete: bool,
+    /// Idle minutes that count as a break (advanced; used by Step 3 sensing).
+    #[serde(rename = "breakThresholdMins", default = "default_break_threshold")]
+    pub break_threshold_mins: u32,
+    /// Idle minutes that close a session (advanced; used by Step 3 sensing).
+    #[serde(rename = "sessionGapMins", default = "default_session_gap")]
+    pub session_gap_mins: u32,
 }
 
 fn default_model() -> String {
     "gemini-3.1-flash-lite-preview".to_string()
+}
+
+fn default_friction() -> String {
+    "soft".to_string()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_break_threshold() -> u32 {
+    5
+}
+
+fn default_session_gap() -> u32 {
+    30
 }
 
 impl Default for AppConfig {
@@ -30,12 +54,11 @@ impl Default for AppConfig {
         Self {
             api_key: String::new(),
             model: default_model(),
-            favorites: vec![
-                FavoriteApp { id: "1".into(), name: "Notion".into(), url: "https://notion.so".into() },
-                FavoriteApp { id: "2".into(), name: "Spotify".into(), url: "https://open.spotify.com".into() },
-                FavoriteApp { id: "3".into(), name: "Antigravity".into(), url: "https://antigravity.com".into() },
-                FavoriteApp { id: "4".into(), name: "Drive".into(), url: "https://drive.google.com".into() },
-            ],
+            friction_level: default_friction(),
+            greeting_enabled: true,
+            onboarding_complete: false,
+            break_threshold_mins: default_break_threshold(),
+            session_gap_mins: default_session_gap(),
         }
     }
 }
@@ -50,28 +73,21 @@ fn config_path() -> PathBuf {
 
 pub fn read_config() -> AppConfig {
     let path = config_path();
-    let mut config = AppConfig::default();
 
-    // Check env var for API key
+    // Start from the saved file when present (serde `default`s fill any new
+    // fields a stored config predates; unknown old fields are ignored),
+    // otherwise from built-in defaults.
+    let mut config = path
+        .exists()
+        .then(|| fs::read_to_string(&path).ok())
+        .flatten()
+        .and_then(|data| serde_json::from_str::<AppConfig>(&data).ok())
+        .unwrap_or_default();
+
+    // An env-provided API key wins (handy for dev without touching the file).
     if let Ok(key) = std::env::var("GEMINI_API_KEY") {
         if !key.is_empty() {
             config.api_key = key;
-        }
-    }
-
-    if path.exists() {
-        if let Ok(data) = fs::read_to_string(&path) {
-            if let Ok(saved) = serde_json::from_str::<AppConfig>(&data) {
-                if !saved.api_key.is_empty() {
-                    config.api_key = saved.api_key;
-                }
-                if !saved.model.is_empty() {
-                    config.model = saved.model;
-                }
-                if !saved.favorites.is_empty() {
-                    config.favorites = saved.favorites;
-                }
-            }
         }
     }
     config
