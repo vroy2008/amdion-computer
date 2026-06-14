@@ -203,6 +203,11 @@ fn spec(id: &str) -> Option<&'static TweakSpec> {
     TWEAKS.iter().find(|t| t.id == id)
 }
 
+/// The few tweaks surfaced in the (deliberately minimal) UI — the highest-impact
+/// "quieter desktop" wins: hide the Dock, clear the desktop, quiet notifications.
+/// The rest of `TWEAKS` stays available to the agent via `list_mac_tweaks`.
+const FEATURED_IDS: &[&str] = &["dock-autohide", "finder-desktop-icons", "notifications"];
+
 /// Public, agent-readable view of one tweak.
 #[derive(Debug, Clone, Serialize)]
 pub struct MacTweak {
@@ -210,6 +215,8 @@ pub struct MacTweak {
     pub label: String,
     pub description: String,
     pub kind: TweakKind,
+    /// Whether this tweak is surfaced in the minimal UI (see `FEATURED_IDS`).
+    pub featured: bool,
     /// For scriptable tweaks: whether it's currently in the focus-friendly
     /// state. `None` for walkthrough tweaks (state can't be read reliably).
     pub enabled: Option<bool>,
@@ -252,6 +259,7 @@ fn to_view(t: &TweakSpec) -> MacTweak {
             label: t.label.into(),
             description: t.description.into(),
             kind: t.kind,
+            featured: FEATURED_IDS.contains(&t.id),
             enabled: read_enabled(t),
             pane: None,
             steps: Vec::new(),
@@ -261,6 +269,7 @@ fn to_view(t: &TweakSpec) -> MacTweak {
             label: t.label.into(),
             description: t.description.into(),
             kind: t.kind,
+            featured: FEATURED_IDS.contains(&t.id),
             enabled: None,
             pane: Some(t.pane.into()),
             steps: t.steps.iter().map(|s| s.to_string()).collect(),

@@ -33,6 +33,11 @@ pub struct AppConfig {
     /// built-in distraction list. Soft = nudge; Lock-In = block/redirect.
     #[serde(rename = "blockList", default)]
     pub block_list: Vec<String>,
+
+    // ── App behavior ──
+    /// Launch Amdion automatically at login. On by default; user-disableable.
+    #[serde(default = "default_true")]
+    pub autostart: bool,
 }
 
 fn default_model() -> String {
@@ -66,6 +71,7 @@ impl Default for AppConfig {
             break_threshold_mins: default_break_threshold(),
             session_gap_mins: default_session_gap(),
             block_list: Vec::new(),
+            autostart: true,
         }
     }
 }

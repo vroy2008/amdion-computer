@@ -1,6 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Amdion bowtie/hourglass mark, monochrome for use as a macOS template
-       menu-bar icon (pure black + alpha; macOS recolors it per appearance). -->
-  <polygon points="20,16 80,16 50,50" fill="#000000"/>
-  <polygon points="20,84 80,84 50,50" fill="#000000"/>
+  <!-- Amdion menu-bar mark = the two-tone hourglass on its own (NO disc): black
+       top triangle + white bottom triangle, with softly rounded corners. Rendered
+       in COLOR (icon_as_template(false)) so both tones survive. -->
+  <g stroke-linejoin="round">
+    <path d="M20 17 L80 17 L50 50 Z" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="4"/>
+    <path d="M20 83 L80 83 L50 50 Z" fill="#ffffff" stroke="#ffffff" stroke-width="4"/>
+  </g>
 </svg>

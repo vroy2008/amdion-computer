@@ -13,7 +13,7 @@ pub async fn send_chat_message(app: tauri::AppHandle, message: String) -> Result
     }
 
     let prompt = format!(
-        "You are Amdion, a minimalist focus assistant. The user is asking you: \"{}\". Be concise, direct, and helpful.",
+        "You are Amdion, a minimalist attention assistant. The user is asking you: \"{}\". Be concise, direct, and helpful.",
         message
     );
 

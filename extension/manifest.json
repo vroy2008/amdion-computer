@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Amdion Companion",
   "version": "1.0.0",
-  "description": "Connects your Chrome to Amdion — reports activity and applies your chosen focus friction. All data stays on your device.",
+  "description": "Connects your Chrome to Amdion — reports activity and applies the attention friction you choose. All data stays on your device.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvN6q/XosM0OaXK0enZpEEQiEb1KxUpfCz0urGCDAn3keo8DxObG6L4adYRaW9RzW9dOGTZn0D2vQ/zXEWqlymhOrG494idNEqVF0pXiJx2BnPdqWagMGNAeBWw8IXXuvMz/pGTt06D0j4d2fwhV3OKX2y3tv7+Ko3NiX6gBeaRIovpBx/q9uNANuEISgdGQG3YrWRd6KhP3XmwH4wbqfKvVB7JFAlPLED1Q+EjvPME8rgIiTVOUEKuoqi3gbjwW7BMaD64vmVnYkA/nOpjB6tPnUEC7ezkvpHxjHp+tuY8p5fnzHUfziGfJdkFXeQOMUQ0/yuvjoBnCPpSOb4oehDQIDAQAB",
   "permissions": [
@@ -15,7 +15,7 @@
   ],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
-  "action": { "default_title": "Amdion — focus companion" },
+  "action": { "default_title": "Amdion — attention companion" },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

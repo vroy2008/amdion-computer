@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Agent app: lives in the menu bar only, never shows a Dock icon or in the
+	     Cmd-Tab switcher. Tauri merges this into the generated Info.plist. The
+	     runtime ActivationPolicy::Accessory call backs this up, but declaring it
+	     here means there is never even a launch-time Dock flash. -->
+	<key>LSUIElement</key>
+	<true/>
+</dict>
+</plist>

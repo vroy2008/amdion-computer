@@ -4,6 +4,7 @@ use crate::bridge_ws::friction_message;
 use crate::config::{read_config, write_config, AppConfig};
 use crate::state::AppState;
 use serde::Deserialize;
+use tauri_plugin_autostart::ManagerExt;
 
 #[tauri::command]
 pub fn get_config() -> Result<AppConfig, String> {
@@ -27,6 +28,7 @@ pub struct ConfigUpdate {
     pub session_gap_mins: Option<u32>,
     #[serde(rename = "blockList")]
     pub block_list: Option<Vec<String>>,
+    pub autostart: Option<bool>,
 }
 
 /// Partial update: only the fields present in `config` are changed. After
@@ -35,6 +37,7 @@ pub struct ConfigUpdate {
 /// connected). `state` is injected by Tauri — the frontend call is unchanged.
 #[tauri::command]
 pub fn save_config(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     config: ConfigUpdate,
 ) -> Result<AppConfig, String> {
@@ -62,6 +65,12 @@ pub fn save_config(
     }
     if let Some(list) = config.block_list {
         current.block_list = list;
+    }
+    if let Some(on) = config.autostart {
+        current.autostart = on;
+        // Keep the OS login item in lockstep with the toggle, immediately.
+        let mgr = app.autolaunch();
+        let _ = if on { mgr.enable() } else { mgr.disable() };
     }
     write_config(&current);
     let _ = state.bridge_tx.send(friction_message());

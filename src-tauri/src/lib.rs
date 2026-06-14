@@ -63,34 +63,53 @@ fn summon_panel(app: &tauri::AppHandle) {
     }
 }
 
-/// Position the panel centered under a menu-bar anchor point and show it,
-/// clamped to stay on the current monitor.
+/// Position the panel just under a menu-bar anchor point and show it.
+///
+/// Multi-monitor was finicky: the old code leaned on `monitor_from_point`, which
+/// can miss on macOS (the platform Y is flipped) and then fell back to the
+/// window's *current* monitor — so the panel opened on whatever display it last
+/// used instead of the one the user clicked (the reported left/right swap).
+/// Instead we pick the display whose horizontal span contains the anchor's X:
+/// menu-bar icons sit at the top of the active display, and X alone uniquely
+/// identifies a side-by-side display regardless of how Y is reported. We then
+/// size the window in *that* display's DPI (it can differ) and clamp the drop
+/// point to its bounds.
 fn show_panel_under(win: &tauri::WebviewWindow, anchor_x: f64, anchor_y: f64) {
-    if let Ok(size) = win.outer_size() {
-        let w = size.width as f64;
-        let mut x = anchor_x - w / 2.0;
-        let y = anchor_y + 6.0;
-        // Anchor on the monitor that contains the tray icon (where the user
-        // clicked), not the window's current monitor — otherwise the panel
-        // gets clamped back onto the primary display on a multi-monitor setup.
-        let monitor = win
-            .monitor_from_point(anchor_x, anchor_y)
-            .ok()
-            .flatten()
-            .or_else(|| win.current_monitor().ok().flatten())
-            .or_else(|| win.primary_monitor().ok().flatten());
-        if let Some(m) = monitor {
+    let monitors = win.available_monitors().unwrap_or_default();
+    let target = monitors
+        .iter()
+        .find(|m| {
             let left = m.position().x as f64;
-            let right = left + m.size().width as f64;
-            if x < left + 8.0 {
-                x = left + 8.0;
-            }
-            if x + w > right - 8.0 {
-                x = right - w - 8.0;
-            }
-        }
-        let _ = win.set_position(PhysicalPosition::new(x as i32, y as i32));
+            left <= anchor_x && anchor_x < left + m.size().width as f64
+        })
+        .cloned()
+        .or_else(|| win.current_monitor().ok().flatten())
+        .or_else(|| win.primary_monitor().ok().flatten());
+
+    // Window width in the TARGET display's pixels: derive the logical width from
+    // the current size/scale, then re-scale, since the target DPI may differ
+    // from the display the window last lived on.
+    let cur_scale = win.scale_factor().unwrap_or(1.0);
+    let logical_w = win
+        .outer_size()
+        .map(|s| s.width as f64 / cur_scale)
+        .unwrap_or(420.0);
+
+    let (mut x, mut y) = (anchor_x - logical_w / 2.0, anchor_y + 6.0);
+    if let Some(m) = &target {
+        let scale = m.scale_factor();
+        let w = logical_w * scale;
+        let left = m.position().x as f64;
+        let right = left + m.size().width as f64;
+        let top = m.position().y as f64;
+        let min_x = left + 8.0;
+        let max_x = (right - w - 8.0).max(min_x);
+        x = (anchor_x - w / 2.0).clamp(min_x, max_x);
+        // Drop just under this display's menu bar. Trust the icon's Y when it's
+        // sane, but never let a flipped/odd Y fling the panel off-screen.
+        y = (anchor_y + 6.0).clamp(top + 4.0, top + 140.0 * scale);
     }
+    let _ = win.set_position(PhysicalPosition::new(x as i32, y as i32));
     let _ = win.show();
     let _ = win.set_focus();
 }
@@ -100,6 +119,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_shortcuts([SUMMON_SHORTCUT])
@@ -114,9 +137,19 @@ pub fn run() {
         )
         .manage(AppState::default())
         .setup(|app| {
-            // Menu-bar app: no Dock icon, no app menu.
+            // Menu-bar app: no Dock icon, no app menu. (The bundled Info.plist
+            // also sets LSUIElement so there isn't even a launch-time flash.)
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            // Launch-at-login: keep the OS login item in sync with the saved
+            // preference (on by default; toggled in Settings → Advanced).
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let want = config::read_config().autostart;
+                let mgr = app.autolaunch();
+                let _ = if want { mgr.enable() } else { mgr.disable() };
+            }
 
             // Open the SQLite event store BEFORE the bridge spawns: the
             // extension can send activity the instant it connects, and
@@ -161,13 +194,15 @@ pub fn run() {
             let quit_i = MenuItemBuilder::with_id("quit", "Quit Amdion").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&open_i, &quit_i]).build()?;
 
-            // A monochrome template glyph so the menu-bar icon adapts to the
-            // light/dark menu bar, instead of the full-color app icon.
+            // The two-tone hourglass mark — black top, white bottom on a neutral
+            // disc, i.e. the inside of the Amdion logo. Rendered in COLOR (not a
+            // macOS template, which would flatten it to a single tint) so both
+            // tones show; the disc keeps it legible on a light or dark menu bar.
             let tray_icon = tauri::include_image!("icons/tray.png");
 
             TrayIconBuilder::with_id(TRAY_ID)
                 .icon(tray_icon)
-                .icon_as_template(true)
+                .icon_as_template(false)
                 .tooltip("Amdion")
                 .menu(&menu)
                 .show_menu_on_left_click(false)

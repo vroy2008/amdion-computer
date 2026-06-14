@@ -1,8 +1,8 @@
 # Amdion Computer
 
-**One calm focus layer over your Mac.** Amdion tunes your machine and your real browser for attention, senses how you're actually working, responds with exactly the amount of friction you chose, and quietly keeps an honest record — built so an AI agent can plug into it later.
+**One calm attention layer over your Mac.** Amdion tunes your machine and your real browser for attention, senses how you're actually working, responds with exactly the amount of friction you chose, and quietly keeps an honest record — built so an AI agent can plug into it later.
 
-It's not an OS replacement and not a browser you live inside. It's a focus *layer*: a calm front door you summon, plus a companion extension that declutters and observes the real Chrome you already use.
+It's not an OS replacement and not a browser you live inside. It's an attention *layer*: a calm front door you summon, plus a companion extension that declutters and observes the real Chrome you already use.
 
 ![Amdion Logo](amdion_logo_new.png)
 

@@ -129,6 +129,18 @@
     .row .label-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
     .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+    /* Collapsible disclosures: the inline "How to connect" hint + Advanced section.
+       Kept out of sight so the settings panel stays calm. */
+    details > summary { cursor: pointer; list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    .disclosure > summary, details.adv > summary { display: inline-flex; align-items: center; gap: 6px; }
+    .disclosure > summary::before, details.adv > summary::before { content: '▸'; font-size: 9px; }
+    .disclosure[open] > summary::before, details.adv[open] > summary::before { content: '▾'; }
+    .disclosure { margin-top: 10px; }
+    .disclosure > summary { font-size: 12px; color: var(--accent); }
+    details.adv > summary { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+    details.adv .adv-body { padding-top: 4px; }
+
     .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
     .seg button { background: none; border: none; color: var(--muted); padding: 7px 12px; font-size: 12px; }
     .seg button.active { background: var(--accent); color: #fff; }
@@ -220,13 +232,13 @@
     <div class="greeting" id="greeting">Welcome back.</div>
 
     <div id="intent-prompt" class="intent-row hidden">
-      <input type="text" id="intent-input" placeholder="What are you focusing on?">
+      <input type="text" id="intent-input" placeholder="What has your attention?">
       <button class="btn primary" id="intent-save">Set</button>
     </div>
 
     <div id="intent-display" class="intent-active hidden">
       <div class="grow">
-        <div class="label">Focusing on</div>
+        <div class="label">Attention on</div>
         <div class="text" id="intent-text"></div>
       </div>
       <button class="btn ghost small" id="intent-clear">Clear</button>
@@ -242,10 +254,11 @@
       </button>
     </div>
     <div class="sheet-body">
+      <!-- 1 · Attention — the only thing most people ever touch. -->
       <div class="section">
-        <h3>Focus</h3>
+        <h3>Attention</h3>
         <div class="row">
-          <div><div class="label-main">Friction</div><div class="label-sub"><b>Off</b> just watches · <b>Soft</b> nudges · <b>Lock-In</b> blocks, in your real Chrome.</div></div>
+          <div><div class="label-main">Friction</div><div class="label-sub"><b>Off</b> just watches · <b>Soft</b> nudges · <b>Lock-In</b> blocks distractions, in your real Chrome.</div></div>
           <div class="seg" id="seg-friction">
             <button data-v="off">Off</button>
             <button data-v="soft">Soft</button>
@@ -253,52 +266,56 @@
           </div>
         </div>
         <div class="row">
-          <div><div class="label-main">Session greeting</div><div class="label-sub">Offer to set an intent each new session.</div></div>
+          <div><div class="label-main">Session greeting</div><div class="label-sub">Ask what has your attention each new session.</div></div>
           <button class="toggle" id="toggle-greeting"></button>
         </div>
-        <div style="margin-top:4px;">
-          <label class="field">Block list — your distractions, one per line (on top of the built-ins)</label>
-          <textarea id="inp-blocklist" rows="3" placeholder="reddit.com&#10;news.example.com"></textarea>
-        </div>
       </div>
 
+      <!-- 2 · Chrome — one pill; the how-to is tucked behind a disclosure. -->
       <div class="section">
-        <h3>Chrome connection</h3>
+        <h3>Chrome</h3>
         <div class="row">
-          <div><div class="label-main">Companion extension</div><div class="label-sub">Reports activity and applies friction in your real Chrome. Data stays on your device.</div></div>
+          <div><div class="label-main">Companion extension</div><div class="label-sub">Applies friction and observes activity in your real Chrome. Stays on your device.</div></div>
           <span class="pill" id="ext-status">checking…</span>
         </div>
-        <div class="muted" style="font-size:11px; line-height:1.7;">
-          Not connected? In Chrome open <code>chrome://extensions</code>, turn on <b>Developer mode</b>,
-          click <b>Load unpacked</b>, and choose Amdion's <code>extension</code> folder.
-        </div>
+        <details class="disclosure">
+          <summary>How to connect</summary>
+          <div class="muted" style="font-size:11px; line-height:1.7; margin-top:8px;">
+            In Chrome open <code>chrome://extensions</code>, turn on <b>Developer mode</b>,
+            click <b>Load unpacked</b>, and choose Amdion's <code>extension</code> folder.
+          </div>
+        </details>
       </div>
 
+      <!-- 3 · Your Mac — exactly three high-impact, reversible tweaks. -->
       <div class="section">
-        <h3>Advanced — sensing thresholds</h3>
-        <div class="field-grid">
-          <div><label class="field">Break after idle (min)</label><input type="number" id="inp-break" min="1" max="120"></div>
-          <div><label class="field">New session after idle (min)</label><input type="number" id="inp-session" min="5" max="240"></div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h3>AI (Gemini)</h3>
-        <label class="field">API key</label>
-        <input type="password" id="inp-apikey" placeholder="Stored locally on this device">
-        <label class="field" style="margin-top:10px;">Model</label>
-        <input type="text" id="inp-model" placeholder="gemini-...">
-      </div>
-
-      <div class="section">
-        <h3>Mac tuning</h3>
-        <div class="muted" style="font-size:12px; margin-bottom:10px;">Reversible system tweaks. Each shows its current state.</div>
+        <h3>Your Mac</h3>
+        <div class="muted" style="font-size:12px; margin-bottom:12px;">Three reversible tweaks for a quieter desktop.</div>
         <div id="settings-tweaks"></div>
-        <div style="display:flex; gap:8px; margin-top:12px;">
-          <button class="btn small" id="tweaks-apply-all">Apply all scriptable</button>
-          <button class="btn ghost small" id="tweaks-revert-all">Revert all</button>
-        </div>
       </div>
+
+      <!-- Everything non-essential lives here, collapsed by default. -->
+      <details class="section adv">
+        <summary>Advanced</summary>
+        <div class="adv-body">
+          <div class="row" style="margin-top:14px;">
+            <div><div class="label-main">Launch at login</div><div class="label-sub">Start Amdion automatically when you log in.</div></div>
+            <button class="toggle" id="toggle-autostart"></button>
+          </div>
+          <label class="field" style="margin-top:14px;">Block list — your distractions, one per line (on top of the built-ins)</label>
+          <textarea id="inp-blocklist" rows="3" placeholder="reddit.com&#10;news.example.com"></textarea>
+
+          <div class="field-grid" style="margin-top:14px;">
+            <div><label class="field">Break after idle (min)</label><input type="number" id="inp-break" min="1" max="120"></div>
+            <div><label class="field">New session after idle (min)</label><input type="number" id="inp-session" min="5" max="240"></div>
+          </div>
+
+          <label class="field" style="margin-top:14px;">AI key (Gemini)</label>
+          <input type="password" id="inp-apikey" placeholder="Stored locally on this device">
+          <label class="field" style="margin-top:10px;">AI model</label>
+          <input type="text" id="inp-model" placeholder="gemini-...">
+        </div>
+      </details>
     </div>
     <div class="sheet-foot">
       <button class="btn ghost small" id="rerun-onboarding">Re-run setup</button>
@@ -343,7 +360,7 @@
       <!-- Step 0: welcome -->
       <div class="ob-step" data-step="0">
         <p class="ob-welcome">
-          Amdion is a calm <b>focus layer</b> that lives in your menu bar.
+          Amdion is a calm <b>attention layer</b> that lives in your menu bar.
           State what you're here to do, and it keeps distractions at arm's length —
           then gets out of your way. Everything stays local on your device.
         </p>
@@ -384,7 +401,7 @@
       <!-- Step 3: done -->
       <div class="ob-step hidden" data-step="3">
         <p class="ob-welcome">You're set. <b>Amdion is now in your menu bar</b> — click the icon or press ⌘⇧Space whenever you want it.</p>
-        <p class="ob-welcome" style="margin-top:12px;">More tuning, your API key, and focus settings live behind the gear.</p>
+        <p class="ob-welcome" style="margin-top:12px;">More tuning, your API key, and attention settings live behind the gear.</p>
       </div>
     </div>
     <div class="sheet-foot">
@@ -471,7 +488,9 @@
     // ── Mac tuning (shared by settings + onboarding) ──
     function renderTweaks(container, opts = {}) {
       container.innerHTML = '';
-      const list = opts.scriptableOnly ? tweaks.filter(t => t.kind === 'scriptable') : tweaks;
+      let list = tweaks;
+      if (opts.featuredOnly) list = list.filter(t => t.featured);
+      if (opts.scriptableOnly) list = list.filter(t => t.kind === 'scriptable');
       list.forEach(tw => {
         const row = document.createElement('div');
         row.className = 'tweak';
@@ -592,12 +611,13 @@
     function loadSettingsForm() {
       setSeg($('seg-friction'), config.frictionLevel);
       $('toggle-greeting').classList.toggle('on', config.greetingEnabled);
+      $('toggle-autostart').classList.toggle('on', config.autostart !== false);
       $('inp-break').value = config.breakThresholdMins;
       $('inp-session').value = config.sessionGapMins;
       $('inp-apikey').value = config.apiKey || '';
       $('inp-model').value = config.model || '';
       $('inp-blocklist').value = (config.blockList || []).join('\n');
-      renderTweaks($('settings-tweaks'), { selectable: false });
+      renderTweaks($('settings-tweaks'), { selectable: false, featuredOnly: true });
       renderExtStatus();
     }
     async function openSettings() {
@@ -609,6 +629,7 @@
       config = await api.saveConfig({
         frictionLevel: $('seg-friction').querySelector('.active')?.dataset.v || 'soft',
         greetingEnabled: $('toggle-greeting').classList.contains('on'),
+        autostart: $('toggle-autostart').classList.contains('on'),
         breakThresholdMins: parseInt($('inp-break').value, 10) || 5,
         sessionGapMins: parseInt($('inp-session').value, 10) || 30,
         apiKey: $('inp-apikey').value.trim(),
@@ -630,7 +651,7 @@
       $('ob-dots').innerHTML = OB_TITLES.map((_, i) => `<span class="dot ${i === obStep ? 'active' : ''}"></span>`).join('');
       $('ob-back').style.visibility = obStep === 0 ? 'hidden' : 'visible';
       $('ob-next').textContent = obStep === OB_TITLES.length - 1 ? 'Finish' : 'Next';
-      if (obStep === 1) renderTweaks($('ob-tweaks'), { selectable: true, scriptableOnly: true });
+      if (obStep === 1) renderTweaks($('ob-tweaks'), { selectable: true, featuredOnly: true });
       if (obStep === 2) renderExtStatus();
     }
     async function startOnboarding() {
@@ -669,16 +690,7 @@
       $('settings-save').onclick = saveSettings;
       $('seg-friction').querySelectorAll('button').forEach(b => b.onclick = () => setSeg($('seg-friction'), b.dataset.v));
       $('toggle-greeting').onclick = (e) => e.target.classList.toggle('on');
-      $('tweaks-apply-all').onclick = async () => {
-        const ids = tweaks.filter(t => t.kind === 'scriptable').map(t => t.id);
-        applyResults(await api.applyMacTuning(ids));
-        renderTweaks($('settings-tweaks'), { selectable: false });
-      };
-      $('tweaks-revert-all').onclick = async () => {
-        const ids = tweaks.filter(t => t.kind === 'scriptable').map(t => t.id);
-        applyResults(await api.revertMacTuning(ids));
-        renderTweaks($('settings-tweaks'), { selectable: false });
-      };
+      $('toggle-autostart').onclick = (e) => e.target.classList.toggle('on');
       $('rerun-onboarding').onclick = () => { $('settings').classList.add('hidden'); startOnboarding(); };
 
       $('ob-apply').onclick = async () => {
@@ -686,7 +698,7 @@
         if (!sel.length) { $('ob-apply-msg').textContent = 'Nothing selected.'; return; }
         $('ob-apply-msg').textContent = 'Applying…';
         applyResults(await api.applyMacTuning(sel));
-        renderTweaks($('ob-tweaks'), { selectable: true, scriptableOnly: true });
+        renderTweaks($('ob-tweaks'), { selectable: true, featuredOnly: true });
         $('ob-apply-msg').textContent = 'Applied ✓';
       };
       $('ob-back').onclick = () => { if (obStep > 0) { obStep--; renderObStep(); } };
