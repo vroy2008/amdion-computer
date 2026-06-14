@@ -18,7 +18,7 @@ use state::AppState;
 use std::time::{Duration, Instant};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Manager, PhysicalPosition, WindowEvent};
+use tauri::{LogicalPosition, Manager, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 
 /// Summon shortcut: toggles the panel (show+focus, or hide if already up).
@@ -29,6 +29,13 @@ const TRAY_ID: &str = "amdion-tray";
 
 /// The point the panel should drop from for a given menu-bar icon rect:
 /// horizontally centered on the icon, vertically at its bottom edge.
+///
+/// Returns *physical* pixels. On macOS the tray rect is reported as the icon's
+/// macOS point coordinates multiplied by the *tray display's* backing scale, so
+/// these values live in that display's physical space — `show_panel_under` turns
+/// them back into logical points once it knows which display the icon is on.
+/// (`rect.position` is already a `Physical` variant here, so `scale` is a no-op;
+/// kept for call-site symmetry.)
 fn anchor_from_rect(rect: &tauri::Rect, scale: f64) -> (f64, f64) {
     let pos = rect.position.to_physical::<f64>(scale);
     let size = rect.size.to_physical::<f64>(scale);
@@ -63,53 +70,163 @@ fn summon_panel(app: &tauri::AppHandle) {
     }
 }
 
+/// Does `m`'s logical frame contain the point `(px, py)`? A monitor's logical
+/// frame — its physical position/size ÷ its own scale — is its true macOS point
+/// rect (i.e. its `CGDisplayBounds`): the one coordinate space that stays
+/// consistent and non-overlapping across mixed-DPI displays. `(px, py)` must be
+/// in that same logical-points space.
+fn frame_contains(m: &tauri::Monitor, px: f64, py: f64) -> bool {
+    let s = m.scale_factor();
+    let (lx, ly) = (m.position().x as f64 / s, m.position().y as f64 / s);
+    let (lw, lh) = (m.size().width as f64 / s, m.size().height as f64 / s);
+    lx <= px && px < lx + lw && ly <= py && py < ly + lh
+}
+
+/// Cursor location in CoreGraphics global display coordinates: points, top-left
+/// origin. That's the ONE space consistent across mixed-DPI displays — exactly
+/// what each monitor's logical frame uses — so it pins the clicked display
+/// unambiguously. The tray rect can't: its physical X is the icon's point ×
+/// *that display's* scale, so an external (1×) icon's coordinate ÷ the main's
+/// (2×) scale folds back into the main's range and the two displays become
+/// indistinguishable. The cursor sits on the clicked icon, so it resolves the
+/// display cleanly. Permission-free, same CoreGraphics FFI family as the idle
+/// sensor.
+#[cfg(target_os = "macos")]
+fn cursor_point() -> Option<(f64, f64)> {
+    #[repr(C)]
+    struct CGPoint {
+        x: f64,
+        y: f64,
+    }
+    type CFTypeRef = *mut std::ffi::c_void;
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventCreate(source: CFTypeRef) -> CFTypeRef;
+        fn CGEventGetLocation(event: CFTypeRef) -> CGPoint;
+    }
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFRelease(cf: CFTypeRef);
+    }
+    // SAFETY: CGEventCreate(NULL) returns a retained event snapshotting the
+    // current input state (including the cursor); we read its location and
+    // release it.
+    unsafe {
+        let ev = CGEventCreate(std::ptr::null_mut());
+        if ev.is_null() {
+            return None;
+        }
+        let p = CGEventGetLocation(ev);
+        CFRelease(ev);
+        Some((p.x, p.y))
+    }
+}
+
+/// The display under the cursor, matched in the consistent logical-points space.
+#[cfg(target_os = "macos")]
+fn monitor_under_cursor(monitors: &[tauri::Monitor]) -> Option<tauri::Monitor> {
+    let (cx, cy) = cursor_point()?;
+    monitors.iter().find(|m| frame_contains(m, cx, cy)).cloned()
+}
+#[cfg(not(target_os = "macos"))]
+fn monitor_under_cursor(_: &[tauri::Monitor]) -> Option<tauri::Monitor> {
+    None
+}
+
+/// The display a tray-summoned panel should open on. Prefer the cursor's
+/// display (it's on the clicked icon); fall back to locating the icon anchor
+/// itself, then the window's current/primary display — so the ⌘⇧Space summon
+/// (no click, cursor may be elsewhere) and non-macOS builds still get an answer.
+fn target_monitor(
+    win: &tauri::WebviewWindow,
+    anchor_x: f64,
+    anchor_y: f64,
+) -> Option<tauri::Monitor> {
+    let monitors = win.available_monitors().unwrap_or_default();
+    monitor_under_cursor(&monitors)
+        .or_else(|| {
+            // The icon anchor ÷ a display's own scale lands inside exactly one
+            // logical frame: the display the icon actually sits on.
+            monitors
+                .iter()
+                .find(|m| {
+                    let s = m.scale_factor();
+                    frame_contains(m, anchor_x / s, anchor_y / s)
+                })
+                .cloned()
+        })
+        .or_else(|| win.current_monitor().ok().flatten())
+        .or_else(|| win.primary_monitor().ok().flatten())
+}
+
 /// Position the panel just under a menu-bar anchor point and show it.
 ///
-/// Multi-monitor was finicky: the old code leaned on `monitor_from_point`, which
-/// can miss on macOS (the platform Y is flipped) and then fell back to the
-/// window's *current* monitor — so the panel opened on whatever display it last
-/// used instead of the one the user clicked (the reported left/right swap).
-/// Instead we pick the display whose horizontal span contains the anchor's X:
-/// menu-bar icons sit at the top of the active display, and X alone uniquely
-/// identifies a side-by-side display regardless of how Y is reported. We then
-/// size the window in *that* display's DPI (it can differ) and clamp the drop
-/// point to its bounds.
+/// Two macOS multi-display traps to dodge. (1) The per-monitor "physical"
+/// values tao reports are each that display's point frame × *its own* scale, so
+/// beside a 1× display the physical spans of a 2× display overlap and can't be
+/// compared — and `set_position(Physical)` then divides by the *window's
+/// current* display scale, not the target's, flinging the panel to a random X.
+/// (2) The tray rect's own X is ambiguous for the same scaling reason (see
+/// `cursor_point`). So: pick the display from the cursor, do all the math in
+/// logical points (the one consistent space), and place with a `LogicalPosition`
+/// that tao writes through without re-scaling.
 fn show_panel_under(win: &tauri::WebviewWindow, anchor_x: f64, anchor_y: f64) {
-    let monitors = win.available_monitors().unwrap_or_default();
-    let target = monitors
-        .iter()
-        .find(|m| {
-            let left = m.position().x as f64;
-            left <= anchor_x && anchor_x < left + m.size().width as f64
-        })
-        .cloned()
-        .or_else(|| win.current_monitor().ok().flatten())
-        .or_else(|| win.primary_monitor().ok().flatten());
-
-    // Window width in the TARGET display's pixels: derive the logical width from
-    // the current size/scale, then re-scale, since the target DPI may differ
-    // from the display the window last lived on.
+    // Panel width in logical points (DPI-independent), from its current size.
     let cur_scale = win.scale_factor().unwrap_or(1.0);
     let logical_w = win
         .outer_size()
         .map(|s| s.width as f64 / cur_scale)
         .unwrap_or(420.0);
 
-    let (mut x, mut y) = (anchor_x - logical_w / 2.0, anchor_y + 6.0);
-    if let Some(m) = &target {
-        let scale = m.scale_factor();
-        let w = logical_w * scale;
-        let left = m.position().x as f64;
-        let right = left + m.size().width as f64;
-        let top = m.position().y as f64;
-        let min_x = left + 8.0;
-        let max_x = (right - w - 8.0).max(min_x);
-        x = (anchor_x - w / 2.0).clamp(min_x, max_x);
-        // Drop just under this display's menu bar. Trust the icon's Y when it's
-        // sane, but never let a flipped/odd Y fling the panel off-screen.
-        y = (anchor_y + 6.0).clamp(top + 4.0, top + 140.0 * scale);
+    let target = target_monitor(win, anchor_x, anchor_y);
+
+    let (x, y) = match &target {
+        Some(m) => {
+            // The icon is on this display, so its scale == the tray rect's
+            // scale: anchor ÷ scale gives the icon's center/bottom in points.
+            let s = m.scale_factor();
+            let lx = m.position().x as f64 / s;
+            let ly = m.position().y as f64 / s;
+            let lw = m.size().width as f64 / s;
+            let (ax, ay) = (anchor_x / s, anchor_y / s);
+            let min_x = lx + 8.0;
+            let max_x = (lx + lw - logical_w - 8.0).max(min_x);
+            let x = (ax - logical_w / 2.0).clamp(min_x, max_x);
+            // Drop just under this display's menu bar; never let an odd Y fling
+            // the panel off-screen.
+            let y = (ay + 6.0).clamp(ly + 4.0, ly + 80.0);
+            (x, y)
+        }
+        // No display matched (shouldn't happen): center on the raw anchor via
+        // the window's current scale.
+        None => (anchor_x / cur_scale - logical_w / 2.0, anchor_y / cur_scale + 6.0),
+    };
+
+    // Run with AMDION_DEBUG_TRAY=1 to dump the geometry if placement is still
+    // off — cursor, anchor, every display's frame, and the chosen drop point.
+    if std::env::var_os("AMDION_DEBUG_TRAY").is_some() {
+        #[cfg(target_os = "macos")]
+        let cur = cursor_point();
+        #[cfg(not(target_os = "macos"))]
+        let cur: Option<(f64, f64)> = None;
+        eprintln!(
+            "[tray] cursor_pts={cur:?} anchor_phys=({anchor_x:.0},{anchor_y:.0}) cur_scale={cur_scale} logical_w={logical_w:.0}"
+        );
+        for m in &win.available_monitors().unwrap_or_default() {
+            let s = m.scale_factor();
+            let (p, sz) = (m.position(), m.size());
+            eprintln!(
+                "[tray]   display scale={s} -> logical x∈[{:.0},{:.0}) y∈[{:.0},{:.0})",
+                p.x as f64 / s,
+                (p.x as f64 + sz.width as f64) / s,
+                p.y as f64 / s,
+                (p.y as f64 + sz.height as f64) / s,
+            );
+        }
+        eprintln!("[tray]   matched={} drop_logical=({x:.0},{y:.0})", target.is_some());
     }
-    let _ = win.set_position(PhysicalPosition::new(x as i32, y as i32));
+
+    let _ = win.set_position(LogicalPosition::new(x, y));
     let _ = win.show();
     let _ = win.set_focus();
 }
