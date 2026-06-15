@@ -70,6 +70,8 @@ function handleMessage(data) {
     case 'open_tab': if (msg.payload && msg.payload.url) chrome.tabs.create({ url: msg.payload.url }); break;
     case 'focus_tab': focusTab(msg.payload && msg.payload.tabId); break;
     case 'close_tab': closeTab(msg.payload && msg.payload.tabId); break;
+    case 'read_mode': applyReadMode(msg.payload || {}); break;
+    case 'read_prefs': applyReadPrefs(msg.payload || {}); break;
     default: break;
   }
 }
@@ -125,6 +127,53 @@ async function rebuildBlockingRules(level, distractions) {
   }
   await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: ourIds, addRules });
 }
+
+// ── Read Mode: enter/exit the in-page reader ────────────────────────────────
+//
+// The reader lives in content/reader.js. Three triggers funnel here:
+//   • the Alt+Shift+R hotkey (chrome.commands, below),
+//   • the app's "Read this tab" (App→Ext `read_mode`), and
+//   • the in-page pill (handled entirely in the content script).
+// We just tell the right tab to enter/exit; the content script does the rest.
+
+function applyReadMode(payload) {
+  const enter = payload.on !== false;
+  const type = enter ? 'amdion-read-enter' : 'amdion-read-exit';
+  const explicit = Number(payload.tabId);
+  if (Number.isInteger(explicit)) sendToTab(explicit, type);
+  else withActiveTab((id) => sendToTab(id, type));
+}
+
+function withActiveTab(fn) {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs && tabs[0];
+    if (tab && Number.isInteger(tab.id)) fn(tab.id);
+  });
+}
+
+function sendToTab(tabId, type) {
+  chrome.tabs.sendMessage(tabId, { type }, () => void chrome.runtime.lastError);
+}
+
+// App→Ext: mirror reading prefs into chrome.storage.local where reader.js reads
+// them. reader.js watches storage and live-applies (theme, size, pill, …).
+function applyReadPrefs(payload) {
+  chrome.storage.local.set({ reading: payload || {} });
+}
+
+// The hotkey fires in the worker; relay it to whatever tab is in front.
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'toggle-read-mode') withActiveTab((id) => sendToTab(id, 'amdion-read-enter'));
+});
+
+// content/reader.js → app: forward read_started / read_ended over the bridge so
+// the app can do the "wrap" (lock other tabs, log reading time). The app routes
+// these like any other Ext→App event (bridge_ws.rs).
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.type === 'amdion-read-event') {
+    send({ type: msg.event === 'started' ? 'read_started' : 'read_ended', payload: msg.payload || {} });
+  }
+});
 
 // ── Activity reporting ──────────────────────────────────────────────────────
 

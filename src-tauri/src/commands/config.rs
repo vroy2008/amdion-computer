@@ -1,6 +1,6 @@
 // Config commands.
 
-use crate::bridge_ws::friction_message;
+use crate::bridge_ws::{friction_message, read_prefs_message};
 use crate::config::{read_config, write_config, AppConfig};
 use crate::state::AppState;
 use serde::Deserialize;
@@ -29,6 +29,7 @@ pub struct ConfigUpdate {
     #[serde(rename = "blockList")]
     pub block_list: Option<Vec<String>>,
     pub autostart: Option<bool>,
+    pub reading: Option<crate::config::ReadingPrefs>,
 }
 
 /// Partial update: only the fields present in `config` are changed. After
@@ -72,7 +73,11 @@ pub fn save_config(
         let mgr = app.autolaunch();
         let _ = if on { mgr.enable() } else { mgr.disable() };
     }
+    if let Some(reading) = config.reading {
+        current.reading = reading;
+    }
     write_config(&current);
     let _ = state.bridge_tx.send(friction_message());
+    let _ = state.bridge_tx.send(read_prefs_message());
     Ok(current)
 }

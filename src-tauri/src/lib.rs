@@ -407,6 +407,9 @@ pub fn run() {
             // Config
             commands::config::get_config,
             commands::config::save_config,
+            // Read Mode: enter/exit the in-page reader on the active tab
+            commands::read::enter_read_mode,
+            commands::read::exit_read_mode,
             // Observer (Step 3): typed daily stats over the event store
             commands::observer::get_daily_summary,
             commands::observer::get_sessions,

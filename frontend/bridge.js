@@ -18,6 +18,10 @@ if (window.__TAURI__) {
     getConfig: () => invoke('get_config'),
     saveConfig: (config) => invoke('save_config', { config }),
 
+    // ── Read Mode ──
+    enterReadMode: () => invoke('enter_read_mode'),
+    exitReadMode: () => invoke('exit_read_mode'),
+
     // ── Observer (Step 3): daily stats over the local event store ──
     getDailySummary: (date) => invoke('get_daily_summary', { date: date || null }),
     getSessions: (date) => invoke('get_sessions', { date: date || null }),

@@ -16,10 +16,25 @@
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "Amdion — attention companion" },
+  "commands": {
+    "toggle-read-mode": {
+      "suggested_key": { "default": "Alt+Shift+R", "mac": "Alt+Shift+R" },
+      "description": "Read this page calmly (Amdion Read Mode)"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content/nudge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "content/vendor/readability.js",
+        "content/vendor/readability-readerable.js",
+        "content/reader.js"
+      ],
       "run_at": "document_idle"
     },
     {

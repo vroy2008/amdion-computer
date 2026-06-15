@@ -243,6 +243,10 @@
       </div>
       <button class="btn ghost small" id="intent-clear">Clear</button>
     </div>
+
+    <div id="read-row" class="hidden" style="margin-top:22px;">
+      <button class="btn ghost small" id="btn-read">Read this tab calmly</button>
+    </div>
   </div>
 
   <!-- Settings -->
@@ -287,7 +291,24 @@
         </details>
       </div>
 
-      <!-- 3 · Your Mac — exactly three high-impact, reversible tweaks. -->
+      <!-- 3 · Reading — the calm in-page reader (Read Mode). -->
+      <div class="section">
+        <h3>Reading</h3>
+        <div class="row">
+          <div><div class="label-main">Reader theme</div><div class="label-sub">Default for Read Mode. Adjust per-article from inside the reader.</div></div>
+          <div class="seg" id="seg-read-theme">
+            <button data-v="sepia">Sepia</button>
+            <button data-v="light">Light</button>
+            <button data-v="dark">Dark</button>
+          </div>
+        </div>
+        <div class="row">
+          <div><div class="label-main">Show &ldquo;Read&rdquo; pill</div><div class="label-sub">A quiet prompt on article pages. The &#8997;&#8679;R hotkey works either way.</div></div>
+          <button class="toggle" id="toggle-pill"></button>
+        </div>
+      </div>
+
+      <!-- 4 · Your Mac — exactly three high-impact, reversible tweaks. -->
       <div class="section">
         <h3>Your Mac</h3>
         <div class="muted" style="font-size:12px; margin-bottom:12px;">Three reversible tweaks for a quieter desktop.</div>
@@ -465,6 +486,7 @@
       $('intent-display').classList.toggle('hidden', !has);
       $('intent-prompt').classList.toggle('hidden', has || !greetingOn);
       if (has) $('intent-text').textContent = state.intent;
+      $('read-row').classList.toggle('hidden', !(state && state.extensionConnected));
     }
     async function setIntent(value) {
       state = await api.setIntent(value || null);
@@ -623,6 +645,8 @@
       $('inp-apikey').value = config.apiKey || '';
       $('inp-model').value = config.model || '';
       $('inp-blocklist').value = (config.blockList || []).join('\n');
+      setSeg($('seg-read-theme'), (config.reading && config.reading.theme) || 'sepia');
+      $('toggle-pill').classList.toggle('on', !(config.reading && config.reading.pillEnabled === false));
       $('update-status').textContent = '';
       renderTweaks($('settings-tweaks'), { selectable: false, featuredOnly: true });
       renderExtStatus();
@@ -642,6 +666,11 @@
         apiKey: $('inp-apikey').value.trim(),
         model: $('inp-model').value.trim(),
         blockList: parseBlockList($('inp-blocklist').value),
+        reading: {
+          ...(config.reading || {}),
+          theme: $('seg-read-theme').querySelector('.active')?.dataset.v || 'sepia',
+          pillEnabled: $('toggle-pill').classList.contains('on'),
+        },
       });
       $('settings').classList.add('hidden');
       renderHome();
@@ -727,8 +756,11 @@
       $('settings-close').onclick = () => $('settings').classList.add('hidden');
       $('settings-save').onclick = saveSettings;
       $('seg-friction').querySelectorAll('button').forEach(b => b.onclick = () => setSeg($('seg-friction'), b.dataset.v));
+      $('seg-read-theme').querySelectorAll('button').forEach(b => b.onclick = () => setSeg($('seg-read-theme'), b.dataset.v));
       $('toggle-greeting').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-autostart').onclick = (e) => e.target.classList.toggle('on');
+      $('toggle-pill').onclick = (e) => e.target.classList.toggle('on');
+      $('btn-read').onclick = async () => { try { await api.enterReadMode(); } catch (_) {} if (api && api.hidePanel) api.hidePanel(); };
       $('rerun-onboarding').onclick = () => { $('settings').classList.add('hidden'); startOnboarding(); };
       $('btn-check-updates').onclick = checkForUpdates;
 

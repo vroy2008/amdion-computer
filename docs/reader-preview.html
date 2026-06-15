@@ -1,0 +1,86 @@
+<!doctype html>
+<!--
+  Dev-only harness to preview Amdion Read Mode without loading the extension in
+  Chrome. It feeds a sample article straight into the real content/reader.js via
+  the window.__AMDION_READER_PREVIEW__ escape hatch (reader.js only honours it
+  when NOT in an extension context). Mirrors the panel-preview trick.
+
+  Serve repo root and open /docs/reader-preview.html:
+    preview_start "amdion-root"  →  http://localhost:4600/docs/reader-preview.html
+  Append ?theme=light|dark|sepia to preview a theme.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Amdion Read Mode — preview</title>
+  <style>html,body{margin:0;height:100%;background:#1a1a1a}</style>
+</head>
+<body>
+  <script>
+    const ARTICLE = {
+      title: "The Lost Art of Reading on a Screen",
+      byline: "By Mira Castellan",
+      siteName: "The Quiet Review",
+      content: `
+        <p>There is a particular kind of failure we have all learned to ignore.
+        You open a long article you genuinely want to read. You mean it. And
+        then, somewhere around the third paragraph, your eyes begin to skid —
+        across a cookie banner, a newsletter pop-up, a sidebar of headlines
+        screaming for the same attention you were trying to give the thing in
+        front of you.</p>
+
+        <p>It is not that we have stopped wanting to read. It is that the screen
+        has quietly become the worst possible place to do it.</p>
+
+        <h2>Why paper still wins</h2>
+
+        <p>A book asks nothing of you except that you turn the page. It does not
+        buzz. It does not autoplay. It does not, halfway down the page, suggest
+        eleven other books you might prefer to the one you are holding. Its
+        single-mindedness is not a limitation; it is the entire point.</p>
+
+        <blockquote>The page you are reading cannot be interrupted by the page
+        you are not.</blockquote>
+
+        <p>The tablet and the e-reader inherited some of this calm. One column.
+        Warm light. A typeface chosen by someone who cared. And — crucially — a
+        device that could not, with one slip of the thumb, become a feed.</p>
+
+        <figure>
+          <img alt="A warm horizon at dusk"
+               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='820' height='360'%3E%3Crect width='820' height='360' fill='%23ddcba0'/%3E%3Ccircle cx='630' cy='130' r='66' fill='%23c4823a'/%3E%3Crect y='250' width='820' height='110' fill='%23b89a63'/%3E%3C/svg%3E" />
+          <figcaption>Calm is a design decision, not an accident.</figcaption>
+        </figure>
+
+        <h2>Bringing the calm to the laptop</h2>
+
+        <p>The laptop need not be exempt from this. The text is already there, in
+        the page — buried, but there. What it lacks is not content but
+        <em>composure</em>: a generous measure, a line height that lets the eye
+        rest, a margin wide enough to breathe, and the simple, radical absence of
+        everything else.</p>
+
+        <p>Give a paragraph room and it stops being a wall. Give the reader a
+        sense of progress — a thin line filling at the top, an honest estimate of
+        the minutes left — and the act of finishing stops feeling infinite.</p>
+
+        <p>And give the machine itself one job for the length of a read, so that
+        no notification, no second tab, no restless little badge can reach in and
+        pull you back out. That last part is the hardest, and it is the only part
+        that truly matters.</p>
+
+        <p>We do not need to read less. We need, for twenty unbroken minutes, to
+        be allowed to read at all.</p>
+      `,
+      // Plain-text twin, used only for the word-count → "N min read" estimate.
+      textContent: ("word ").repeat(640),
+      length: 3200,
+    };
+
+    const theme = new URLSearchParams(location.search).get("theme") || "sepia";
+    window.__AMDION_READER_PREVIEW__ = { article: ARTICLE, prefs: { theme } };
+  </script>
+  <script src="/extension/content/reader.js"></script>
+</body>
+</html>

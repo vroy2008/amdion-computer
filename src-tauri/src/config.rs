@@ -38,6 +38,45 @@ pub struct AppConfig {
     /// Launch Amdion automatically at login. On by default; user-disableable.
     #[serde(default = "default_true")]
     pub autostart: bool,
+
+    // ── Read Mode ──
+    /// Reading-surface preferences, mirrored to the extension's reader.
+    #[serde(default)]
+    pub reading: ReadingPrefs,
+}
+
+/// Read Mode preferences. Pushed to the extension (chrome.storage.local
+/// "reading"), which content/reader.js reads and live-applies. The in-reader
+/// controls can override per session; this is the panel-managed default.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadingPrefs {
+    /// "sepia" | "light" | "dark".
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    /// "serif" | "sans".
+    #[serde(default = "default_typeface")]
+    pub typeface: String,
+    /// Font-size step, 1..=5.
+    #[serde(default = "default_read_size")]
+    pub size: u8,
+    /// Words-per-minute for the "N min read" estimate.
+    #[serde(default = "default_wpm")]
+    pub wpm: u32,
+    /// Show the quiet in-page "Read" pill on article-like pages.
+    #[serde(rename = "pillEnabled", default = "default_true")]
+    pub pill_enabled: bool,
+}
+
+impl Default for ReadingPrefs {
+    fn default() -> Self {
+        Self {
+            theme: default_theme(),
+            typeface: default_typeface(),
+            size: default_read_size(),
+            wpm: default_wpm(),
+            pill_enabled: true,
+        }
+    }
 }
 
 fn default_model() -> String {
@@ -60,6 +99,22 @@ fn default_session_gap() -> u32 {
     30
 }
 
+fn default_theme() -> String {
+    "sepia".to_string()
+}
+
+fn default_typeface() -> String {
+    "serif".to_string()
+}
+
+fn default_read_size() -> u8 {
+    3
+}
+
+fn default_wpm() -> u32 {
+    240
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -72,6 +127,7 @@ impl Default for AppConfig {
             session_gap_mins: default_session_gap(),
             block_list: Vec::new(),
             autostart: true,
+            reading: ReadingPrefs::default(),
         }
     }
 }

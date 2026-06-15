@@ -6,9 +6,10 @@
 // loopback only and speaks a small JSON envelope `{ type, payload }`:
 //
 //   Ext → App : hello, tab_opened / tab_activated / tab_closed / tab_navigated,
-//               idle_state, ping
+//               idle_state, read_started / read_ended, ping
 //   App → Ext : friction { level, blockList }, open_tab { url },
-//               focus_tab { tabId }, close_tab { tabId }
+//               focus_tab { tabId }, close_tab { tabId },
+//               read_mode { on }, read_prefs { theme, typeface, size, wpm, pillEnabled }
 //
 // Commands push App→Ext messages by sending an already-serialized JSON string on
 // `AppState.bridge_tx` (a broadcast channel); each connection's pump forwards it.
@@ -150,6 +151,7 @@ async fn handle_conn(
                         // Configure the extension the instant it connects — the
                         // broadcast reaches our own freshly-subscribed `rx`.
                         let _ = tx.send(friction_message());
+                        let _ = tx.send(read_prefs_message());
                     } else {
                         break; // refuse pre-auth traffic
                     }
@@ -197,7 +199,8 @@ fn hello_ok(env: &Envelope, token: &str) -> bool {
 /// both streams by timestamp.
 fn route_event(app: &AppHandle, env: &Envelope) {
     match env.typ.as_str() {
-        "tab_opened" | "tab_activated" | "tab_closed" | "tab_navigated" | "idle_state" => {
+        "tab_opened" | "tab_activated" | "tab_closed" | "tab_navigated" | "idle_state"
+        | "read_started" | "read_ended" => {
             persist_browser_event(app, env);
             let _ = app.emit("browser-activity", env);
         }
@@ -239,6 +242,24 @@ pub fn friction_message() -> String {
     serde_json::json!({
         "type": "friction",
         "payload": { "level": cfg.friction_level, "blockList": cfg.block_list },
+    })
+    .to_string()
+}
+
+/// The current reading prefs as an App→Ext `read_prefs` message. The extension
+/// stores the payload at chrome.storage.local "reading"; content/reader.js reads
+/// the same keys (theme, typeface, size, wpm, pillEnabled) and live-applies them.
+pub fn read_prefs_message() -> String {
+    let r = read_config().reading;
+    serde_json::json!({
+        "type": "read_prefs",
+        "payload": {
+            "theme": r.theme,
+            "typeface": r.typeface,
+            "size": r.size,
+            "wpm": r.wpm,
+            "pillEnabled": r.pill_enabled,
+        },
     })
     .to_string()
 }
