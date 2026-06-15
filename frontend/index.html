@@ -187,6 +187,10 @@
     .obs-live .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
     .obs-live .dot.active { background: var(--ok); box-shadow: 0 0 0 3px rgba(46,204,113,0.18); }
     .obs-live .dot.break { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    /* Reading callout — a calm highlight of Read-Mode time, above the grid. */
+    .read-stat { display: flex; align-items: center; gap: 9px; background: var(--accent-soft); border: 1px solid var(--border-strong); border-radius: 10px; padding: 11px 14px; font-size: 13px; margin-bottom: 16px; }
+    .read-stat svg { flex-shrink: 0; color: var(--accent); }
+    .read-stat b { font-weight: 500; }
     .obs-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
     .stat .v { font-size: 20px; font-weight: 300; }
@@ -306,6 +310,10 @@
           <div><div class="label-main">Show &ldquo;Read&rdquo; pill</div><div class="label-sub">A quiet prompt on article pages. The &#8997;&#8679;R hotkey works either way.</div></div>
           <button class="toggle" id="toggle-pill"></button>
         </div>
+        <div class="row">
+          <div><div class="label-main">Lock distractions while reading</div><div class="label-sub">Blocks your distraction sites in Chrome until you leave the reader, then restores your friction setting.</div></div>
+          <button class="toggle" id="toggle-readlock"></button>
+        </div>
       </div>
 
       <!-- 4 · Your Mac — exactly three high-impact, reversible tweaks. -->
@@ -330,6 +338,13 @@
             <div><label class="field">Break after idle (min)</label><input type="number" id="inp-break" min="1" max="120"></div>
             <div><label class="field">New session after idle (min)</label><input type="number" id="inp-session" min="5" max="240"></div>
           </div>
+
+          <label class="field" style="margin-top:14px;">Run a Shortcut when reading starts / ends (optional)</label>
+          <div class="field-grid">
+            <input type="text" id="inp-focus-start" placeholder="On read start">
+            <input type="text" id="inp-focus-end" placeholder="On read end">
+          </div>
+          <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.6;">Names of macOS <b>Shortcuts</b> to run — e.g. ones that turn a Focus on, then off, while you read. Leave blank to do nothing.</div>
 
           <label class="field" style="margin-top:14px;">AI key (Gemini)</label>
           <input type="password" id="inp-apikey" placeholder="Stored locally on this device">
@@ -360,6 +375,7 @@
     </div>
     <div class="sheet-body">
       <div id="obs-live" class="obs-live"><span class="dot"></span><span class="muted">No live signal yet</span></div>
+      <div id="obs-reading" class="read-stat hidden"></div>
       <div class="obs-stats" id="obs-stats"></div>
       <div class="section">
         <h3>Time by app</h3>
@@ -608,6 +624,17 @@
       }).join('');
     }
 
+    // A calm highlight of Read-Mode time today; hidden when there's none yet.
+    function renderReadingStat(summary) {
+      const el = $('obs-reading');
+      if (!el) return;
+      const ms = summary.readingMs || 0, n = summary.articlesRead || 0;
+      if (ms <= 0 && n <= 0) { el.classList.add('hidden'); return; }
+      const arts = n ? ` · ${n} article${n === 1 ? '' : 's'}` : '';
+      el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h6a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 4h-6a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H22z"/></svg><span>Read calmly for <b>${fmtDur(ms)}</b> today${arts}</span>`;
+      el.classList.remove('hidden');
+    }
+
     async function refreshObserver() {
       renderObsLive();
       let summary, sessions;
@@ -623,6 +650,7 @@
         ['Breaks', String(summary.breakCount)],
         ['App switches', String(summary.switchCount)],
       ].map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+      renderReadingStat(summary);
       renderBars($('obs-apps'), (summary.apps || []).slice(0, 6).map(a => ({ label: a.name || a.bundle, ms: a.ms })));
       renderBars($('obs-sites'), (summary.sites || []).slice(0, 6).map(s => ({ label: s.domain, ms: s.ms })));
       renderSessions($('obs-sessions'), sessions);
@@ -647,6 +675,9 @@
       $('inp-blocklist').value = (config.blockList || []).join('\n');
       setSeg($('seg-read-theme'), (config.reading && config.reading.theme) || 'sepia');
       $('toggle-pill').classList.toggle('on', !(config.reading && config.reading.pillEnabled === false));
+      $('toggle-readlock').classList.toggle('on', !(config.reading && config.reading.lockTabs === false));
+      $('inp-focus-start').value = (config.reading && config.reading.focusShortcutStart) || '';
+      $('inp-focus-end').value = (config.reading && config.reading.focusShortcutEnd) || '';
       $('update-status').textContent = '';
       renderTweaks($('settings-tweaks'), { selectable: false, featuredOnly: true });
       renderExtStatus();
@@ -670,6 +701,9 @@
           ...(config.reading || {}),
           theme: $('seg-read-theme').querySelector('.active')?.dataset.v || 'sepia',
           pillEnabled: $('toggle-pill').classList.contains('on'),
+          lockTabs: $('toggle-readlock').classList.contains('on'),
+          focusShortcutStart: $('inp-focus-start').value.trim(),
+          focusShortcutEnd: $('inp-focus-end').value.trim(),
         },
       });
       $('settings').classList.add('hidden');
@@ -760,6 +794,7 @@
       $('toggle-greeting').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-autostart').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-pill').onclick = (e) => e.target.classList.toggle('on');
+      $('toggle-readlock').onclick = (e) => e.target.classList.toggle('on');
       $('btn-read').onclick = async () => { try { await api.enterReadMode(); } catch (_) {} if (api && api.hidePanel) api.hidePanel(); };
       $('rerun-onboarding').onclick = () => { $('settings').classList.add('hidden'); startOnboarding(); };
       $('btn-check-updates').onclick = checkForUpdates;

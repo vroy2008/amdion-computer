@@ -44,6 +44,11 @@ pub struct DailySummary {
     pub active_ms: i64,
     pub break_count: usize,
     pub switch_count: usize,
+    /// Time spent in Read Mode today: sum of `secondsRead` over the reads that
+    /// ended. A calm-reading highlight, surfaced separately from app/site time.
+    pub reading_ms: i64,
+    /// Number of reads that ended today (≈ articles read).
+    pub articles_read: usize,
     pub apps: Vec<AppStat>,
     pub sites: Vec<SiteStat>,
 }
@@ -165,6 +170,7 @@ fn summarize(
 
     let first_ts = events.first().map(|e| e.ts).unwrap_or(now);
     let time_on_computer_ms = (now - first_ts).max(0);
+    let (reading_ms, articles_read) = reading_stats(events);
 
     DailySummary {
         date,
@@ -172,9 +178,34 @@ fn summarize(
         active_ms,
         break_count: timeline.break_count,
         switch_count: timeline.switch_count,
+        reading_ms,
+        articles_read,
         apps,
         sites: site_stats(events, now),
     }
+}
+
+/// Read-Mode time and article count for the day. Each `read_ended` carries the
+/// session's `secondsRead` (reader.js); summing those is robust to overlap and
+/// to a missing `read_started` (e.g. a read in progress at midnight). A read
+/// still open now contributes nothing until it ends — acceptable for a daily
+/// tally.
+fn reading_stats(events: &[Event]) -> (i64, usize) {
+    let mut ms = 0i64;
+    let mut count = 0usize;
+    for e in events {
+        if e.kind == "read_ended" && e.source == "browser" {
+            count += 1;
+            let secs = e
+                .meta
+                .as_deref()
+                .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+                .and_then(|v| v.get("secondsRead").and_then(|s| s.as_i64()))
+                .unwrap_or(0);
+            ms += secs.max(0).saturating_mul(1000);
+        }
+    }
+    (ms, count)
 }
 
 /// Approximate time per site: attribute the gap between consecutive browser
@@ -282,5 +313,23 @@ mod tests {
         let site_ms = |d: &str| s.sites.iter().find(|x| x.domain == d).map(|x| x.ms);
         assert_eq!(site_ms("github.com"), Some(2 * MAX_SITE_SPAN_MS));
         assert_eq!(site_ms("reddit.com"), Some(MAX_SITE_SPAN_MS));
+        // No reads in the seeded day.
+        assert_eq!((s.reading_ms, s.articles_read), (0, 0));
+    }
+
+    // Reading time sums `secondsRead` across `read_ended` events; an in-progress
+    // read (only `read_started`) doesn't count until it ends.
+    #[test]
+    fn reading_stats_sum_completed_reads() {
+        let evs = vec![
+            ev(0, "read_started", "browser", None, Some("https://a.com"), None),
+            ev(7, "read_ended", "browser", None, Some("https://a.com"), Some(r#"{"secondsRead":420,"pctRead":88}"#)),
+            ev(20, "read_started", "browser", None, Some("https://b.com"), Some(r#"{"secondsRead":180}"#)),
+            // a third read is still open — no read_ended, so it's not tallied
+            ev(40, "read_started", "browser", None, Some("https://c.com"), None),
+        ];
+        let s = summarize(&evs, 50 * MIN, "2026-06-15".into(), 5 * MIN, 30 * MIN);
+        assert_eq!(s.articles_read, 1, "only the one read that ended counts");
+        assert_eq!(s.reading_ms, 420 * 1000, "secondsRead → ms");
     }
 }

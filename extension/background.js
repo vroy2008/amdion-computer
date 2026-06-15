@@ -103,7 +103,29 @@ async function applyFriction(payload) {
   const distractions = [...new Set([...BUILTIN_DISTRACTIONS, ...blockList])];
   // Content scripts read these (and react to storage changes) for Soft nudges.
   await chrome.storage.local.set({ friction: { level, blockList }, distractions });
-  await rebuildBlockingRules(level, distractions);
+  await refreshBlocking();
+}
+
+// Recompute Lock-In blocking from the *effective* level: the user's base
+// friction, escalated to Lock-In while a read is open ("the wrap"). Driving
+// every rule rebuild through one function — over state that lives in storage,
+// not memory — means snapshot/restore is implicit (the base level IS the
+// snapshot) and self-healing: an MV3 worker restart, a reconnect, or any
+// friction push recomputes the truth, so a read lock can never strand the user.
+async function refreshBlocking() {
+  const { friction, distractions, readingLock } = await chrome.storage.local.get([
+    'friction', 'distractions', 'readingLock',
+  ]);
+  const base = (friction && friction.level) || 'off';
+  const set = Array.isArray(distractions) ? distractions : BUILTIN_DISTRACTIONS;
+  await rebuildBlockingRules(readingLock ? 'lockin' : base, set);
+}
+
+// Raise/lower "the wrap". Persisted to storage (survives a worker restart) and
+// applied via the effective-level recompute above.
+async function setReadingLock(on) {
+  await chrome.storage.local.set({ readingLock: !!on });
+  await refreshBlocking();
 }
 
 async function rebuildBlockingRules(level, distractions) {
@@ -158,7 +180,10 @@ function sendToTab(tabId, type) {
 // App→Ext: mirror reading prefs into chrome.storage.local where reader.js reads
 // them. reader.js watches storage and live-applies (theme, size, pill, …).
 function applyReadPrefs(payload) {
-  chrome.storage.local.set({ reading: payload || {} });
+  const reading = payload || {};
+  chrome.storage.local.set({ reading });
+  // Turning the wrap off (in the panel) releases an in-progress lock at once.
+  if (reading.lockTabs === false) setReadingLock(false);
 }
 
 // The hotkey fires in the worker; relay it to whatever tab is in front.
@@ -166,14 +191,27 @@ chrome.commands.onCommand.addListener((command) => {
   if (command === 'toggle-read-mode') withActiveTab((id) => sendToTab(id, 'amdion-read-enter'));
 });
 
-// content/reader.js → app: forward read_started / read_ended over the bridge so
-// the app can do the "wrap" (lock other tabs, log reading time). The app routes
-// these like any other Ext→App event (bridge_ws.rs).
+// content/reader.js → app + local wrap. We (a) forward read_started/read_ended
+// over the bridge so the app can log reading time and run an optional Focus
+// Shortcut, and (b) apply the lock-distractions half of the wrap right here, so
+// it works even when the app/bridge is down (matching the reader itself).
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === 'amdion-read-event') {
-    send({ type: msg.event === 'started' ? 'read_started' : 'read_ended', payload: msg.payload || {} });
+    const started = msg.event === 'started';
+    send({ type: started ? 'read_started' : 'read_ended', payload: msg.payload || {} });
+    applyReadingWrap(started);
   }
 });
+
+// Raise the wrap on read start (unless the user opted out via lockTabs); always
+// lower it on read end. A refresh recomputes from the base level, so lowering is
+// the restore.
+async function applyReadingWrap(started) {
+  if (!started) return setReadingLock(false);
+  const { reading } = await chrome.storage.local.get(['reading']);
+  if (reading && reading.lockTabs === false) return; // default on; explicit opt-out only
+  await setReadingLock(true);
+}
 
 // ── Activity reporting ──────────────────────────────────────────────────────
 
@@ -200,11 +238,18 @@ chrome.alarms.onAlarm.addListener((a) => {
   else if (ws.readyState === WebSocket.OPEN) send({ type: 'ping' });
 });
 
-chrome.runtime.onStartup.addListener(connect);
+chrome.runtime.onStartup.addListener(() => {
+  // A fresh browser session can't have a reader mid-read, so clear any wrap a
+  // crash/quit during a previous read left set — otherwise it would keep
+  // blocking with no reader open. (Ephemeral worker recycles don't fire
+  // onStartup, so a genuinely ongoing read keeps its lock.)
+  chrome.storage.local.set({ readingLock: false }).then(refreshBlocking);
+  connect();
+});
 chrome.runtime.onInstalled.addListener(() => {
   // Seed defaults so content scripts have the distraction set before the app
   // first connects (level stays off → no nudge until the app says otherwise).
-  chrome.storage.local.set({ friction: { level: 'off', blockList: [] }, distractions: BUILTIN_DISTRACTIONS });
+  chrome.storage.local.set({ friction: { level: 'off', blockList: [] }, distractions: BUILTIN_DISTRACTIONS, readingLock: false });
   connect();
   chrome.tabs.create({ url: chrome.runtime.getURL('walkthrough.html') });
 });

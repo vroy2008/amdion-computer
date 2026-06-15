@@ -149,7 +149,10 @@ struct Built {
 fn is_activity(ev: &Event) -> bool {
     match ev.kind.as_str() {
         "active" | "app_focus" => ev.source == "os",
-        "tab_opened" | "tab_activated" | "tab_navigated" => ev.source == "browser",
+        // `read_started` is presence too: a Read-Mode session is calm, low-input
+        // scrolling, so this keeps it firmly inside a block even on the rare tick
+        // where the OS idle poll hasn't yet seen the scroll input.
+        "tab_opened" | "tab_activated" | "tab_navigated" | "read_started" => ev.source == "browser",
         _ => false,
     }
 }
@@ -388,6 +391,20 @@ mod tests {
         // first block closed at last evidence (2m), not extended to 300m
         assert_eq!(t.sessions[0].blocks[0].end_ts, 2 * MIN);
         assert_eq!(t.sessions.len(), 2);
+    }
+
+    // A read counts as presence: a `read_started` with no other activity still
+    // forms a block (the user is reading, not idle).
+    #[test]
+    fn reading_counts_as_presence() {
+        let evs = vec![
+            ev(0, "read_started", "browser", None, Some(r#"{"url":"https://x.com/a"}"#)),
+            ev(20 * MIN, "idle", "os", None, Some(r#"{"idleSecs":0}"#)),
+        ];
+        let t = classify(&evs, 21 * MIN, 5 * MIN, 30 * MIN);
+        assert_eq!(t.sessions.len(), 1);
+        assert_eq!(t.sessions[0].blocks[0].start_ts, 0);
+        assert_eq!(t.sessions[0].blocks[0].end_ts, 20 * MIN);
     }
 
     // An un-closed trailing run is closed at `now` and flagged open.

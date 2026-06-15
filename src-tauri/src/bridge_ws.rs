@@ -202,6 +202,14 @@ fn route_event(app: &AppHandle, env: &Envelope) {
         "tab_opened" | "tab_activated" | "tab_closed" | "tab_navigated" | "idle_state"
         | "read_started" | "read_ended" => {
             persist_browser_event(app, env);
+            // Optional "auto-Focus" wrap: run the user's macOS Shortcut on a read
+            // boundary (no-op unless one is configured). The lock-distractions
+            // half of the wrap lives in the extension so it works bridge-down.
+            if env.typ == "read_started" {
+                crate::commands::read::on_read_boundary(true);
+            } else if env.typ == "read_ended" {
+                crate::commands::read::on_read_boundary(false);
+            }
             let _ = app.emit("browser-activity", env);
         }
         "ping" => {} // keepalive only
@@ -259,6 +267,9 @@ pub fn read_prefs_message() -> String {
             "size": r.size,
             "wpm": r.wpm,
             "pillEnabled": r.pill_enabled,
+            // The extension applies "the wrap" (lock distractions during a read);
+            // the focus-shortcut names stay app-side and aren't forwarded.
+            "lockTabs": r.lock_tabs,
         },
     })
     .to_string()

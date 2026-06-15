@@ -65,6 +65,21 @@ pub struct ReadingPrefs {
     /// Show the quiet in-page "Read" pill on article-like pages.
     #[serde(rename = "pillEnabled", default = "default_true")]
     pub pill_enabled: bool,
+    /// "The wrap": block your distraction sites in Chrome for the duration of a
+    /// read, then restore your normal friction level on exit. Snapshot/restore
+    /// is implicit — the extension layers a Lock-In over your base level while
+    /// reading and drops back to it after (see extension/background.js).
+    #[serde(rename = "lockTabs", default = "default_true")]
+    pub lock_tabs: bool,
+    /// Optional macOS Shortcut to run when a read *starts* (e.g. one that turns
+    /// on a Focus). Empty = do nothing. App-side only — not sent to the
+    /// extension; run via `shortcuts run` (commands/read.rs).
+    #[serde(rename = "focusShortcutStart", default)]
+    pub focus_shortcut_start: String,
+    /// Optional macOS Shortcut to run when a read *ends* (e.g. one that turns the
+    /// Focus back off). Empty = do nothing.
+    #[serde(rename = "focusShortcutEnd", default)]
+    pub focus_shortcut_end: String,
 }
 
 impl Default for ReadingPrefs {
@@ -75,6 +90,9 @@ impl Default for ReadingPrefs {
             size: default_read_size(),
             wpm: default_wpm(),
             pill_enabled: true,
+            lock_tabs: true,
+            focus_shortcut_start: String::new(),
+            focus_shortcut_end: String::new(),
         }
     }
 }
