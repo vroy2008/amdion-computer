@@ -62,16 +62,43 @@ jobs:
       - name: Install JS deps (Tauri CLI)
         run: npm install
 
-      - name: Build, sign, notarize, and draft the release
-        uses: tauri-apps/tauri-action@v0
+      # Apple Developer ID signing + notarization only kick in once these secrets
+      # exist. Do NOT pass empty APPLE_* vars to the build: Tauri treats a
+      # present-but-empty APPLE_CERTIFICATE as "import this cert" and dies at
+      # `security import`. So map the secrets into THIS step only, and propagate
+      # them to the build step (via $GITHUB_ENV) just when the cert is non-empty.
+      # Unsigned builds stay green now; signing turns on automatically the moment
+      # APPLE_CERTIFICATE is added.
+      - name: Enable Apple signing when its secrets are present
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "No APPLE_CERTIFICATE secret — building UNSIGNED (Gatekeeper-blocked on other Macs until Apple secrets are added)."
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE<<__CERT_EOF__"
+            echo "$APPLE_CERTIFICATE"
+            echo "__CERT_EOF__"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+          } >> "$GITHUB_ENV"
+          echo "Apple signing + notarization enabled."
+
+      - name: Build, sign, notarize, and draft the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # APPLE_* arrive from $GITHUB_ENV above, only when the cert secret exists.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
