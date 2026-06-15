@@ -4,3 +4,4 @@ pub mod config;
 pub mod observer;
 pub mod session;
 pub mod tuning;
+pub mod updater;

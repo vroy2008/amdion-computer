@@ -314,6 +314,12 @@
           <input type="password" id="inp-apikey" placeholder="Stored locally on this device">
           <label class="field" style="margin-top:10px;">AI model</label>
           <input type="text" id="inp-model" placeholder="gemini-...">
+
+          <div class="row" style="margin-top:16px;">
+            <div><div class="label-main">Updates</div><div class="label-sub">Amdion updates itself automatically. Check now if you like.</div></div>
+            <button class="btn ghost small" id="btn-check-updates" style="white-space:nowrap;">Check now</button>
+          </div>
+          <div id="update-status" class="muted" style="font-size:11px;"></div>
         </div>
       </details>
     </div>
@@ -617,6 +623,7 @@
       $('inp-apikey').value = config.apiKey || '';
       $('inp-model').value = config.model || '';
       $('inp-blocklist').value = (config.blockList || []).join('\n');
+      $('update-status').textContent = '';
       renderTweaks($('settings-tweaks'), { selectable: false, featuredOnly: true });
       renderExtStatus();
     }
@@ -638,6 +645,37 @@
       });
       $('settings').classList.add('hidden');
       renderHome();
+    }
+
+    // Manual update check. The app already auto-updates on launch; this is the
+    // "do it now" affordance. On a staged update it offers a relaunch to apply.
+    async function checkForUpdates() {
+      const btn = $('btn-check-updates');
+      const status = $('update-status');
+      status.textContent = '';
+      if (!api.checkForUpdates) { status.textContent = 'Updates are unavailable in this build.'; return; }
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      try {
+        const res = await api.checkForUpdates();
+        if (res && res.available) {
+          status.textContent = 'Update ready — v' + (res.version || '?') + ', applies on next launch. ';
+          const relaunch = document.createElement('button');
+          relaunch.className = 'btn primary small';
+          relaunch.style.marginTop = '8px';
+          relaunch.textContent = 'Relaunch now';
+          relaunch.onclick = () => { if (api.relaunchApp) api.relaunchApp(); };
+          status.appendChild(relaunch);
+        } else {
+          status.textContent = "You're up to date" + (res && res.current ? ' · v' + res.current : '') + '.';
+        }
+      } catch (e) {
+        status.textContent = "Couldn't check for updates (are you online?).";
+      } finally {
+        btn.textContent = label;
+        btn.disabled = false;
+      }
     }
 
     // ── Onboarding (welcome → optional tune → done) ──
@@ -692,6 +730,7 @@
       $('toggle-greeting').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-autostart').onclick = (e) => e.target.classList.toggle('on');
       $('rerun-onboarding').onclick = () => { $('settings').classList.add('hidden'); startOnboarding(); };
+      $('btn-check-updates').onclick = checkForUpdates;
 
       $('ob-apply').onclick = async () => {
         const sel = tweaks.filter(t => t.kind === 'scriptable' && t._sel).map(t => t.id);

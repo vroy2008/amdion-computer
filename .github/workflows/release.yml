@@ -1,0 +1,86 @@
+# Build, sign, notarize, and publish a macOS release of Amdion.
+#
+# Trigger: push a version tag, e.g.
+#     git tag v1.0.1 && git push origin v1.0.1
+#
+# Output: a DRAFT GitHub Release containing
+#   - AMDION_<ver>_universal.dmg          (Intel + Apple Silicon)
+#   - AMDION.app.tar.gz + .sig            (the auto-updater artifact + signature)
+#   - latest.json                         (the updater manifest the app polls)
+# Review the draft, then publish it — the live app's updater points at
+# /releases/latest/download/latest.json, so publishing is what ships the update.
+#
+# REQUIRED SECRETS (Settings -> Secrets and variables -> Actions). Until these
+# exist the job still runs but produces an UNSIGNED build that Gatekeeper blocks
+# on other Macs — see docs/DEPLOYMENT.md.
+#
+#   Apple Developer ID signing + notarization:
+#     APPLE_CERTIFICATE            base64 of your Developer ID Application .p12
+#     APPLE_CERTIFICATE_PASSWORD   the .p12 export password
+#     APPLE_SIGNING_IDENTITY       e.g. "Developer ID Application: Name (TEAMID)"
+#     APPLE_ID                     your Apple Developer account email
+#     APPLE_PASSWORD               an app-specific password for that Apple ID
+#     APPLE_TEAM_ID                your 10-char Team ID
+#
+#   Updater artifact signing (already generated — see docs/DEPLOYMENT.md):
+#     TAURI_SIGNING_PRIVATE_KEY            contents of ~/.amdion/amdion-updater.key
+#     TAURI_SIGNING_PRIVATE_KEY_PASSWORD   "" (the key was made without a password)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Needed so tauri-action can create the GitHub Release.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node (provides the Tauri CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust (both macOS arches for the universal build)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache cargo build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # package-lock.json is gitignored in this repo, so use `install`, not `ci`.
+      - name: Install JS deps (Tauri CLI)
+        run: npm install
+
+      - name: Build, sign, notarize, and draft the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          # Universal binary so one DMG runs on Intel and Apple Silicon.
+          args: --target universal-apple-darwin
+          tagName: ${{ github.ref_name }}
+          releaseName: "Amdion ${{ github.ref_name }}"
+          releaseBody: "See the assets below to download. Amdion auto-updates itself once installed."
+          releaseDraft: true
+          prerelease: false
+          # Emit latest.json so the in-app updater has a manifest to poll.
+          includeUpdaterJson: true

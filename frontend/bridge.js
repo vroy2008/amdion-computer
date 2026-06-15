@@ -28,5 +28,9 @@ if (window.__TAURI__) {
     applyMacTuning: (keys) => invoke('apply_mac_tuning', { keys }),
     revertMacTuning: (keys) => invoke('revert_mac_tuning', { keys }),
     openSettingsPane: (pane) => invoke('open_settings_pane', { pane }),
+
+    // ── Updates ──
+    checkForUpdates: () => invoke('check_for_updates'),
+    relaunchApp: () => invoke('relaunch_app'),
   };
 }

@@ -236,6 +236,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -289,6 +290,21 @@ pub fn run() {
             // Sensing engine: a background thread polling OS idle + frontmost app
             // into the same event store (macOS only; a no-op stub elsewhere).
             sensing::start(app.handle());
+
+            // Silent auto-update: a short while after launch, check GitHub
+            // Releases for a newer signed build and stage it (applied next
+            // launch). Best-effort — network/endpoint errors are swallowed (e.g.
+            // before the first release exists, or while offline). Release builds
+            // only: `tauri dev` has no bundled .app to replace, and a manual
+            // `check_for_updates` command stays available either way.
+            #[cfg(not(debug_assertions))]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    let _ = commands::updater::check_and_install(&handle).await;
+                });
+            }
 
             let win = app.get_webview_window("main").expect("main window missing");
 
@@ -402,6 +418,9 @@ pub fn run() {
             // AI chat + transcription
             commands::chat::send_chat_message,
             commands::chat::transcribe_audio,
+            // Auto-update
+            commands::updater::check_for_updates,
+            commands::updater::relaunch_app,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
