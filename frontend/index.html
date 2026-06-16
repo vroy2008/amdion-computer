@@ -174,6 +174,17 @@
     #onboarding .ob-step[data-step="3"] { text-align: center; }
     .ob-welcome { line-height: 1.7; font-size: 15px; color: #d6d6d6; }
     .ob-welcome b { color: var(--fg); font-weight: 500; }
+    /* Connect-Chrome step: a status card + numbered badge steps, to match the
+       weight of the Welcome prose and the Tune-your-Mac cards. */
+    .ob-connect-status { display: flex; align-items: center; gap: 10px; margin: 18px 0; padding: 11px 14px;
+      background: var(--accent-soft); border: 1px solid var(--border); border-radius: 10px; }
+    .ob-connect-steps { list-style: none; margin: 16px 0 0; padding: 0; counter-reset: step;
+      display: flex; flex-direction: column; gap: 11px; }
+    .ob-connect-steps li { counter-increment: step; display: flex; align-items: flex-start; gap: 12px;
+      font-size: 13px; color: #cfcfcf; line-height: 1.55; }
+    .ob-connect-steps li::before { content: counter(step); flex-shrink: 0; width: 22px; height: 22px;
+      border-radius: 50%; border: 1px solid var(--border-strong); display: flex; align-items: center;
+      justify-content: center; font-size: 12px; color: var(--muted); }
 
     /* On finish, the onboarding sheet flies toward the menu-bar icon (top-right). */
     #onboarding.retreating { animation: retreat 0.55s cubic-bezier(0.5, 0, 0.7, 0) forwards; pointer-events: none; }
@@ -331,6 +342,21 @@
             <div><div class="label-main">Launch at login</div><div class="label-sub">Start Amdion automatically when you log in.</div></div>
             <button class="toggle" id="toggle-autostart"></button>
           </div>
+
+          <div class="row" style="margin-top:18px;">
+            <div><div class="label-main">Summon shortcut</div><div class="label-sub">Show or hide the Amdion panel from anywhere.</div></div>
+            <button class="btn ghost small" id="btn-summon-shortcut" style="white-space:nowrap; min-width:104px;">⌘⇧Space</button>
+          </div>
+          <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.6;">
+            <span id="summon-shortcut-hint">Click the shortcut, then press the keys you want — include at least one of ⌘ ⌥ ⌃ ⇧.</span>
+            <a href="#" id="summon-shortcut-reset">Reset to default</a>.
+          </div>
+
+          <div class="row" style="margin-top:16px;">
+            <div><div class="label-main">Read Mode shortcut</div><div class="label-sub">Toggle the in-page reader. Owned by Chrome, not Amdion.</div></div>
+            <span class="muted" style="font-size:12px; white-space:nowrap;">⌥⇧R</span>
+          </div>
+          <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.6;">Change it on Chrome's shortcuts page: <code>chrome://extensions/shortcuts</code>.</div>
           <label class="field" style="margin-top:14px;">Block list — your distractions, one per line (on top of the built-ins)</label>
           <textarea id="inp-blocklist" rows="3" placeholder="reddit.com&#10;news.example.com"></textarea>
 
@@ -408,7 +434,7 @@
           then gets out of your way. Everything stays local on your device.
         </p>
         <p class="ob-welcome" style="margin-top:14px;">
-          Summon it any time with <b>⌘⇧Space</b> or the menu-bar icon.
+          Summon it any time with <b class="summon-kbd">⌘⇧Space</b> or the menu-bar icon.
         </p>
       </div>
 
@@ -426,24 +452,24 @@
 
       <!-- Step 2: connect Chrome -->
       <div class="ob-step hidden" data-step="2">
-        <div class="muted" style="font-size:13px; margin-bottom:14px; line-height:1.6;">
-          Amdion works through your <b>real Chrome</b> — a companion extension keeps your profile, logins, and extensions intact, and everything it sees stays on your device.
-        </div>
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <p class="ob-welcome">
+          Amdion works through your <b>real Chrome</b> — a companion extension reports activity and applies the friction you choose, while your profile, logins, and other extensions stay exactly as they are.
+        </p>
+        <div class="ob-connect-status">
           <span class="pill" id="ob-ext-status">checking…</span>
-          <span class="muted" style="font-size:12px;">updates live once it connects</span>
+          <span class="muted" style="font-size:12px;">Updates live the moment it connects.</span>
         </div>
-        <ol class="tweak-steps" style="font-size:12px;">
+        <ol class="ob-connect-steps">
           <li>Open <code>chrome://extensions</code> in Chrome</li>
           <li>Turn on <b>Developer mode</b> (top-right)</li>
           <li>Click <b>Load unpacked</b> → choose Amdion's <code>extension</code> folder</li>
         </ol>
-        <p class="muted" style="font-size:11px; margin-top:12px;">You can skip this and connect later from Settings.</p>
+        <p class="muted" style="font-size:12px; margin-top:16px;">You can skip this and connect later — from <b>Settings</b> anytime.</p>
       </div>
 
       <!-- Step 3: done -->
       <div class="ob-step hidden" data-step="3">
-        <p class="ob-welcome">You're set. <b>Amdion is now in your menu bar</b> — click the icon or press ⌘⇧Space whenever you want it.</p>
+        <p class="ob-welcome">You're set. <b>Amdion is now in your menu bar</b> — click the icon or press <span class="summon-kbd">⌘⇧Space</span> whenever you want it.</p>
         <p class="ob-welcome" style="margin-top:12px;">More tuning, your API key, and attention settings live behind the gear.</p>
       </div>
     </div>
@@ -678,6 +704,8 @@
       $('toggle-readlock').classList.toggle('on', !(config.reading && config.reading.lockTabs === false));
       $('inp-focus-start').value = (config.reading && config.reading.focusShortcutStart) || '';
       $('inp-focus-end').value = (config.reading && config.reading.focusShortcutEnd) || '';
+      $('summon-shortcut-hint').textContent = SUMMON_HINT;
+      updateSummonLabels();
       $('update-status').textContent = '';
       renderTweaks($('settings-tweaks'), { selectable: false, featuredOnly: true });
       renderExtStatus();
@@ -708,6 +736,108 @@
       });
       $('settings').classList.add('hidden');
       renderHome();
+    }
+
+    // ── Summon shortcut (global hotkey) ──
+    // The backend stores a Tauri accelerator string (e.g.
+    // "CommandOrControl+Shift+Space"); the panel shows the mac glyphs and
+    // captures a new combo from a keydown, re-registering it via the backend.
+    const SUMMON_DEFAULT = 'CommandOrControl+Shift+Space';
+    const SUMMON_HINT = 'Click the shortcut, then press the keys you want — include at least one of ⌘ ⌥ ⌃ ⇧.';
+    let capturingSummon = false;
+
+    // Accelerator string → mac glyph label, modifiers in macOS order (⌃⌥⇧⌘).
+    function accelToLabel(accel) {
+      if (!accel) return '—';
+      const mods = { control: '⌃', ctrl: '⌃', alt: '⌥', option: '⌥', shift: '⇧',
+        super: '⌘', cmd: '⌘', command: '⌘', commandorcontrol: '⌘', cmdorctrl: '⌘', meta: '⌘' };
+      const keys = { space: 'Space', up: '↑', down: '↓', left: '←', right: '→',
+        enter: '↵', return: '↵', comma: ',', period: '.', slash: '/' };
+      let glyphs = '', key = '';
+      for (const raw of accel.split('+')) {
+        const t = raw.trim().toLowerCase();
+        if (mods[t]) { if (!glyphs.includes(mods[t])) glyphs += mods[t]; }
+        else key = keys[t] || raw.trim().toUpperCase();
+      }
+      return ['⌘', '⌃', '⌥', '⇧'].filter(g => glyphs.includes(g)).join('') + key;
+    }
+
+    // A keydown → Tauri accelerator, or null if it's not yet a usable combo
+    // (needs at least one modifier plus a non-modifier key).
+    function eventToAccel(e) {
+      const MOD_CODES = ['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight',
+        'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight'];
+      if (MOD_CODES.includes(e.code)) return null;       // bare modifier — keep waiting
+      const mods = [];
+      if (e.metaKey) mods.push('CommandOrControl');
+      if (e.ctrlKey) mods.push('Control');
+      if (e.altKey) mods.push('Alt');
+      if (e.shiftKey) mods.push('Shift');
+      if (!mods.length) return null;                     // require a modifier
+      const c = e.code;
+      let key = null;
+      if (c === 'Space') key = 'Space';
+      else if (/^Key[A-Z]$/.test(c)) key = c.slice(3);
+      else if (/^Digit[0-9]$/.test(c)) key = c.slice(5);
+      else if (/^F[0-9]{1,2}$/.test(c)) key = c;
+      else if (c === 'ArrowUp') key = 'Up';
+      else if (c === 'ArrowDown') key = 'Down';
+      else if (c === 'ArrowLeft') key = 'Left';
+      else if (c === 'ArrowRight') key = 'Right';
+      else if (c === 'Comma') key = ',';
+      else if (c === 'Period') key = '.';
+      else if (c === 'Slash') key = '/';
+      if (!key) return null;                              // unsupported main key
+      return [...mods, key].join('+');
+    }
+
+    function updateSummonLabels() {
+      const label = accelToLabel((config && config.summonShortcut) || SUMMON_DEFAULT);
+      const btn = $('btn-summon-shortcut');
+      if (btn && !capturingSummon) btn.textContent = label;
+      document.querySelectorAll('.summon-kbd').forEach(el => el.textContent = label);
+    }
+
+    function startSummonCapture() {
+      if (capturingSummon) return;
+      capturingSummon = true;
+      const btn = $('btn-summon-shortcut');
+      const hint = $('summon-shortcut-hint');
+      btn.textContent = 'Press keys…';
+      btn.classList.add('primary');
+      function stop() {
+        capturingSummon = false;
+        btn.classList.remove('primary');
+        document.removeEventListener('keydown', onKey, true);
+        updateSummonLabels();
+      }
+      const onKey = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();                             // don't let Esc hide the panel mid-capture
+        if (e.key === 'Escape') { stop(); return; }      // cancel, keep current binding
+        const accel = eventToAccel(e);
+        if (!accel) return;                              // wait for a complete combo
+        stop();
+        try {
+          config.summonShortcut = await api.setSummonShortcut(accel);
+          hint.textContent = 'Saved — ' + accelToLabel(config.summonShortcut) + ' now summons Amdion.';
+        } catch (err) {
+          hint.textContent = (err && err.message) ? err.message : String(err);
+        }
+        updateSummonLabels();
+      };
+      document.addEventListener('keydown', onKey, true);
+    }
+
+    async function resetSummonShortcut() {
+      const hint = $('summon-shortcut-hint');
+      try {
+        config.summonShortcut = await api.setSummonShortcut(SUMMON_DEFAULT);
+        hint.textContent = 'Reset — ' + accelToLabel(config.summonShortcut) + ' now summons Amdion.';
+      } catch (err) {
+        hint.textContent = (err && err.message) ? err.message : String(err);
+      }
+      updateSummonLabels();
     }
 
     // Manual update check. The app already auto-updates on launch; this is the
@@ -798,6 +928,8 @@
       $('btn-read').onclick = async () => { try { await api.enterReadMode(); } catch (_) {} if (api && api.hidePanel) api.hidePanel(); };
       $('rerun-onboarding').onclick = () => { $('settings').classList.add('hidden'); startOnboarding(); };
       $('btn-check-updates').onclick = checkForUpdates;
+      $('btn-summon-shortcut').onclick = startSummonCapture;
+      $('summon-shortcut-reset').onclick = (e) => { e.preventDefault(); resetSummonShortcut(); };
 
       $('ob-apply').onclick = async () => {
         const sel = tweaks.filter(t => t.kind === 'scriptable' && t._sel).map(t => t.id);
@@ -846,6 +978,7 @@
         } catch (_) {}
 
         wireEvents();
+        updateSummonLabels();
         renderHome();
         renderExtStatus();
 
