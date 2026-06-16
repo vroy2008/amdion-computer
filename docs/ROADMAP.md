@@ -106,7 +106,7 @@ A guided first-run that makes the user's computer calmer in ~60 seconds. Split b
 
 **Chrome — via the extension/walkthrough:**
 - Disable the new-tab news feed and recent-tab suggestions
-- Install/enable uBlock
+- Install/enable uBlock Origin Lite
 - "Small changes, huge attention impact."
 
 ---
