@@ -21,7 +21,9 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{LogicalPosition, Manager, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 
-/// Summon shortcut: toggles the panel (show+focus, or hide if already up).
+/// Default summon shortcut: toggles the panel (show+focus, or hide if already
+/// up). User-rebindable at runtime (see `commands::shortcut`); this is the
+/// binding registered at launch and the fallback if a custom one won't bind.
 const SUMMON_SHORTCUT: &str = "CommandOrControl+Shift+Space";
 
 /// Tray icon id, used to look the icon's screen rect back up for positioning.
@@ -242,9 +244,10 @@ pub fn run() {
             None,
         ))
         .plugin(
+            // Nothing is pre-registered here: setup() registers the user's saved
+            // summon binding (rebound live by commands::shortcut), and this one
+            // global handler fires for whichever accelerator is currently active.
             tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts([SUMMON_SHORTCUT])
-                .expect("failed to register summon shortcut")
                 .with_handler(|app, _shortcut, event| {
                     if event.state() != ShortcutState::Pressed {
                         return;
@@ -267,6 +270,19 @@ pub fn run() {
                 let want = config::read_config().autostart;
                 let mgr = app.autolaunch();
                 let _ = if want { mgr.enable() } else { mgr.disable() };
+            }
+
+            // Register the global summon shortcut from the saved config, falling
+            // back to the built-in default if a customized binding won't take
+            // (e.g. another app already owns it). Rebound live in Settings via
+            // commands::shortcut::set_summon_shortcut.
+            {
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                let gs = app.global_shortcut();
+                let want = config::read_config().summon_shortcut;
+                if gs.register(want.as_str()).is_err() && want != SUMMON_SHORTCUT {
+                    let _ = gs.register(SUMMON_SHORTCUT);
+                }
             }
 
             // Open the SQLite event store BEFORE the bridge spawns: the
@@ -327,10 +343,10 @@ pub fn run() {
             let quit_i = MenuItemBuilder::with_id("quit", "Quit Amdion").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&open_i, &quit_i]).build()?;
 
-            // The two-tone hourglass mark — black top, white bottom on a neutral
-            // disc, i.e. the inside of the Amdion logo. Rendered in COLOR (not a
-            // macOS template, which would flatten it to a single tint) so both
-            // tones show; the disc keeps it legible on a light or dark menu bar.
+            // The Amdion hourglass mark in its cyan→blue gradient, disc-less so it
+            // fills the menu bar. Rendered in COLOR (not a macOS template, which
+            // would flatten it to one tint) so the gradient survives; the
+            // saturated hue keeps it legible on a light or dark menu bar.
             let tray_icon = tauri::include_image!("icons/tray.png");
 
             TrayIconBuilder::with_id(TRAY_ID)
@@ -407,6 +423,7 @@ pub fn run() {
             // Config
             commands::config::get_config,
             commands::config::save_config,
+            commands::shortcut::set_summon_shortcut,
             // Read Mode: enter/exit the in-page reader on the active tab
             commands::read::enter_read_mode,
             commands::read::exit_read_mode,

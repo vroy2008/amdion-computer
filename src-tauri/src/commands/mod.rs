@@ -4,5 +4,6 @@ pub mod config;
 pub mod observer;
 pub mod read;
 pub mod session;
+pub mod shortcut;
 pub mod tuning;
 pub mod updater;

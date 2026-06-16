@@ -43,6 +43,13 @@ pub struct AppConfig {
     /// Reading-surface preferences, mirrored to the extension's reader.
     #[serde(default)]
     pub reading: ReadingPrefs,
+
+    // ── Hotkeys ──
+    /// Global "summon the panel" accelerator, in Tauri global-shortcut syntax
+    /// (e.g. "CommandOrControl+Shift+Space"). Rebindable in Settings → Advanced;
+    /// applied live and re-registered on change (see commands/shortcut.rs).
+    #[serde(rename = "summonShortcut", default = "default_summon_shortcut")]
+    pub summon_shortcut: String,
 }
 
 /// Read Mode preferences. Pushed to the extension (chrome.storage.local
@@ -105,6 +112,13 @@ fn default_friction() -> String {
     "soft".to_string()
 }
 
+/// Built-in summon shortcut — the single source of truth is `SUMMON_SHORTCUT`
+/// in lib.rs, which is also the registration fallback if a saved binding won't
+/// take.
+pub fn default_summon_shortcut() -> String {
+    crate::SUMMON_SHORTCUT.to_string()
+}
+
 fn default_true() -> bool {
     true
 }
@@ -146,6 +160,7 @@ impl Default for AppConfig {
             block_list: Vec::new(),
             autostart: true,
             reading: ReadingPrefs::default(),
+            summon_shortcut: default_summon_shortcut(),
         }
     }
 }

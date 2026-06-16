@@ -17,6 +17,7 @@ if (window.__TAURI__) {
     // ── Config ──
     getConfig: () => invoke('get_config'),
     saveConfig: (config) => invoke('save_config', { config }),
+    setSummonShortcut: (accelerator) => invoke('set_summon_shortcut', { accelerator }),
 
     // ── Read Mode ──
     enterReadMode: () => invoke('enter_read_mode'),
