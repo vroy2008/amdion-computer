@@ -167,16 +167,21 @@
         .scroll::-webkit-scrollbar { width: 9px; }
         .scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 9px; }
 
-        .col { max-width: 33em; margin: 0 auto; padding: 11vh 24px 28vh;
+        .col { max-width: 36em; margin: 0 auto; padding: 11vh 24px 28vh;
                font-size: var(--fs); line-height: 1.62; }
         .meta { font: 600 11px/1 ${SANS}; letter-spacing: .14em; text-transform: uppercase;
                 color: var(--muted); margin-bottom: 18px; }
         h1.title { font-family: var(--ff); font-weight: 700; font-size: 1.9em;
                    line-height: 1.18; margin: 0 0 .5em; letter-spacing: -0.01em; }
         .byline { font: 14px ${SANS}; color: var(--muted); margin: 0 0 2.4em; }
-        .body { font-size: 1em; }
+        /* Justified, hyphenated body — flush both edges for a typeset feel;
+           hyphens keep the word-spacing even (needs the content's lang, which
+           the shadow tree inherits from the host page). */
+        .body { font-size: 1em; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
         .body p { margin: 0 0 1.15em; }
-        .body h2, .body h3 { font-family: var(--ff); line-height: 1.3; margin: 1.6em 0 .5em; }
+        /* Headings read better ragged-left, never justified. */
+        .body h2, .body h3 { font-family: var(--ff); line-height: 1.3; margin: 1.6em 0 .5em;
+               text-align: left; hyphens: none; }
         .body a { color: var(--accent); text-underline-offset: 2px; }
         .body img, .body figure img { max-width: 100%; height: auto; display: block;
                    margin: 1.6em auto; border-radius: 6px; }
@@ -327,6 +332,10 @@
       if (p && p.catch) p.catch(() => {});
     } catch (_) {}
     document.addEventListener("keydown", onKey, true);
+    // The browser consumes the first Esc to exit fullscreen (the page never sees
+    // that keydown), which would otherwise strand the reader windowed-in-tab.
+    // Treat leaving fullscreen as leaving Read Mode, so one Esc exits cleanly.
+    document.addEventListener("fullscreenchange", onFsChange);
     startedAt = Date.now();
     maxPct = 0;
     tell("started", {
@@ -347,12 +356,19 @@
       pctRead: Math.round(maxPct * 100),
     });
     document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("fullscreenchange", onFsChange);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     document.documentElement.style.overflow = "";
     host.remove();
     host = shadow = scroller = null;
     clearTimeout(controlsTimer);
     maybeShowPill(); // article's still readerable — offer to re-enter
+  }
+
+  // Left fullscreen while reading (the Esc the page never received, or a manual
+  // exit) → close the reader too, so Read Mode is never left in a windowed limbo.
+  function onFsChange() {
+    if (!document.fullscreenElement && isOpen()) close();
   }
 
   function onKey(e) {
@@ -405,7 +421,7 @@
     if (!EXT || pill || isOpen() || !prefs.pillEnabled) return;
     if (typeof isProbablyReaderable === "undefined" || !isProbablyReaderable(document)) return;
     pill = document.createElement("div");
-    pill.style.cssText = "all: initial; position: fixed; bottom: 20px; right: 20px; z-index: 2147483645;";
+    pill.style.cssText = "all: initial; position: fixed; top: 20px; right: 20px; z-index: 2147483645;";
     const sh = pill.attachShadow({ mode: "open" });
     sh.innerHTML = `
       <style>
@@ -416,11 +432,15 @@
              backdrop-filter: blur(10px); opacity: .55; transition: opacity .18s, transform .18s; }
         .p:hover { opacity: 1; transform: translateY(-1px); }
         .dot { font: 600 9px ${SANS}; letter-spacing: .2em; color: #2480ba; }
+        /* The entry hotkey, taught right where reading begins. */
+        .kbd { font: 600 10px ${SANS}; letter-spacing: .03em; color: #c2c2c2;
+               border: 1px solid rgba(255,255,255,.2); border-radius: 6px; padding: 2px 6px; }
         .x { margin-left: 2px; opacity: .6; padding: 0 2px; }
         .x:hover { opacity: 1; }
       </style>
-      <div class="p" title="Read this calmly (Amdion)">
+      <div class="p" title="Read this calmly — ⌥⇧R (Amdion)">
         <span class="dot">READ</span>
+        <span class="kbd">⌥⇧R</span>
         <span class="x" data-x title="Hide">×</span>
       </div>`;
     sh.querySelector(".p").addEventListener("click", (e) => {
