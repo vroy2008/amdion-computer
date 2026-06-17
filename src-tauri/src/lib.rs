@@ -430,6 +430,15 @@ pub fn run() {
             // Read Mode: enter/exit the in-page reader on the active tab
             commands::read::enter_read_mode,
             commands::read::exit_read_mode,
+            // Attention layer: present (wrap) + capture the active tab
+            commands::attention::capture_tab,
+            commands::attention::present_mode,
+            commands::attention::open_source,
+            // Amdion Notes: browse / search / render / delete captures
+            commands::notes::list_notes,
+            commands::notes::search_notes,
+            commands::notes::get_note_image,
+            commands::notes::delete_note,
             // Observer (Step 3): typed daily stats over the event store
             commands::observer::get_daily_summary,
             commands::observer::get_sessions,

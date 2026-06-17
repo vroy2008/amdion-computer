@@ -1,6 +1,8 @@
+pub mod attention;
 pub mod browser;
 pub mod chat;
 pub mod config;
+pub mod notes;
 pub mod observer;
 pub mod read;
 pub mod session;

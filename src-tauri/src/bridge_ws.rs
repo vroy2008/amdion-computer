@@ -6,10 +6,12 @@
 // loopback only and speaks a small JSON envelope `{ type, payload }`:
 //
 //   Ext → App : hello, tab_opened / tab_activated / tab_closed / tab_navigated,
-//               idle_state, read_started / read_ended, ping
+//               idle_state, read_started / read_ended,
+//               note_captured { kind, source, url, title, page, text, image }, ping
 //   App → Ext : friction { level, blockList }, open_tab { url },
 //               focus_tab { tabId }, close_tab { tabId },
-//               read_mode { on }, read_prefs { theme, typeface, size, wpm, pillEnabled }
+//               read_mode { on }, read_prefs { theme, typeface, size, wpm, pillEnabled },
+//               capture_tab {}, present_mode { on }
 //
 // Commands push App→Ext messages by sending an already-serialized JSON string on
 // `AppState.bridge_tx` (a broadcast channel); each connection's pump forwards it.
@@ -25,6 +27,7 @@
 
 use crate::config::{app_data_dir, read_config};
 use crate::state::AppState;
+use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -212,9 +215,68 @@ fn route_event(app: &AppHandle, env: &Envelope) {
             }
             let _ = app.emit("browser-activity", env);
         }
+        // A capture from the Attention layer (a highlight, typed note, or
+        // viewport screenshot). Persisted SYNCHRONOUSLY on this inbound path —
+        // the reliable direction — so a capture is never carried on the lossy
+        // App→Ext broadcast that drops oldest on lag.
+        "note_captured" => {
+            persist_note(app, env);
+            let _ = app.emit("notes-updated", ());
+        }
         "ping" => {} // keepalive only
         _ => {}
     }
+}
+
+/// Persist one captured note. A screenshot rides in `image` as a `data:` URL; we
+/// decode it once and write the bytes to `app-data/notes/<file>`, storing only
+/// the relative path (the DB never holds image blobs). Everything is best-effort
+/// — a dropped capture logs, it doesn't crash the WS read loop.
+fn persist_note(app: &AppHandle, env: &Envelope) {
+    let Some(db) = app.try_state::<crate::db::Db>() else {
+        eprintln!("[bridge] db not ready; dropping note_captured");
+        return;
+    };
+    let p = &env.payload;
+    let s = |k: &str| p.get(k).and_then(|v| v.as_str()).filter(|v| !v.is_empty());
+    let kind = s("kind").unwrap_or("note");
+    let source = s("source").unwrap_or("web");
+    let image_path = p.get("image").and_then(|v| v.as_str()).and_then(save_image);
+    db.insert_note(
+        kind,
+        source,
+        s("url"),
+        s("title"),
+        s("page"),
+        s("text"),
+        image_path.as_deref(),
+        s("meta"),
+    );
+}
+
+/// Decode a `data:image/...;base64,...` URL to a file under `app-data/notes/`,
+/// returning the relative path ("notes/<file>"). `None` on any malformed input.
+fn save_image(data_url: &str) -> Option<String> {
+    let comma = data_url.find(',')?;
+    let header = &data_url[..comma];
+    if !header.starts_with("data:") {
+        return None;
+    }
+    let ext = if header.contains("jpeg") || header.contains("jpg") {
+        "jpg"
+    } else {
+        "png"
+    };
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_url[comma + 1..].as_bytes())
+        .ok()?;
+    let dir = app_data_dir().join("notes");
+    std::fs::create_dir_all(&dir).ok()?;
+    let ts = chrono::Utc::now().timestamp_millis();
+    let rnd: u32 = rand::random();
+    let name = format!("note-{ts}-{rnd:08x}.{ext}");
+    std::fs::write(dir.join(&name), &bytes).ok()?;
+    Some(format!("notes/{name}"))
 }
 
 /// Append a browser event to the event store as a `'browser'`-source row: `url`

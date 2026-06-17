@@ -226,6 +226,27 @@
     .sess-track .blk.open { background: var(--ok); }
     .obs-empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
 
+    /* Home: the "this tab" attention actions (shown only when Chrome is wired up) */
+    .attn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+
+    /* Notes (Amdion Notes) — captures browsed from the panel */
+    .notes-search { margin-bottom: 14px; }
+    .note-day { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 16px 0 6px; }
+    .note { display: flex; gap: 11px; padding: 12px 0; border-top: 1px solid var(--border); }
+    .note:first-child { border-top: none; }
+    .note-thumb { width: 62px; height: 46px; border-radius: 7px; border: 1px solid var(--border); object-fit: cover; background: #1c1c1c; flex-shrink: 0; }
+    .note-main { flex: 1; min-width: 0; }
+    .note-top { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+    .note-kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+    .note-time { font-size: 11px; color: var(--muted); }
+    .note-body { font-size: 13px; line-height: 1.45; word-break: break-word;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .note-body.empty { color: var(--muted); font-style: italic; }
+    .note-src { font-size: 11px; color: var(--muted); margin-top: 5px; display: flex; align-items: center; gap: 8px; }
+    .note-src .src-link { color: var(--accent); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .note-src .src-del { color: var(--muted); cursor: pointer; margin-left: auto; flex-shrink: 0; padding: 0 2px; }
+    .note-src .src-del:hover { color: var(--err); }
+
     ::-webkit-scrollbar { width: 7px; }
     ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
   </style>
@@ -236,6 +257,9 @@
   <div id="topbar">
     <div class="logo">AMDION</div>
     <div style="display:flex; gap:2px;">
+      <button class="icon-btn" id="btn-notes" title="Notes">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      </button>
       <button class="icon-btn" id="btn-observer" title="Today">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="18" y1="20" x2="18" y2="10"/></svg>
       </button>
@@ -263,8 +287,10 @@
       <button class="btn ghost small" id="intent-clear">Clear</button>
     </div>
 
-    <div id="read-row" class="hidden" style="margin-top:22px;">
+    <div id="read-row" class="attn-row hidden">
       <button class="btn ghost small" id="btn-read">Read this tab calmly</button>
+      <button class="btn ghost small" id="btn-present" title="Fullscreen + lock distractions on this tab">Focus this tab</button>
+      <button class="btn ghost small" id="btn-capture" title="Screenshot this tab to Amdion Notes (⌃⇧C)">Capture this tab</button>
     </div>
 
     <div class="home-hint">Summon Amdion any time with <span class="summon-kbd">⌃⇧A</span> — Control + Shift + A.</div>
@@ -422,6 +448,21 @@
         <div id="obs-sessions"></div>
       </div>
       <p class="muted" style="font-size:11px; line-height:1.6; margin-top:6px;">All of this stays on your device.</p>
+    </div>
+  </div>
+
+  <!-- Notes (Amdion Notes) -->
+  <div id="notes" class="sheet hidden">
+    <div class="sheet-head">
+      <div class="title">NOTES</div>
+      <button class="icon-btn" id="notes-close">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <input type="text" id="notes-search" class="notes-search" placeholder="Search highlights, notes, sources…">
+      <div id="notes-list"></div>
+      <p class="muted" style="font-size:11px; line-height:1.6; margin-top:10px;">Highlights, notes, and screenshots you capture — stored on your device for you or your agent.</p>
     </div>
   </div>
 
@@ -711,6 +752,95 @@
       await refreshObserver();
     }
 
+    // ── Notes (Amdion Notes) — the Attention layer's capture library ──
+    let notesSearchTimer = null;
+    const fmtNoteTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    function dayLabel(ts) {
+      const d = new Date(ts), now = new Date(), y = new Date(now);
+      y.setDate(now.getDate() - 1);
+      const same = (a, b) => a.toDateString() === b.toDateString();
+      if (same(d, now)) return 'Today';
+      if (same(d, y)) return 'Yesterday';
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+    function srcHost(url) {
+      if (!url) return '';
+      try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return url; }
+    }
+
+    function renderNotes(notes) {
+      const list = $('notes-list');
+      if (!notes || !notes.length) {
+        list.innerHTML = '<div class="obs-empty">No notes yet. Select text to save a highlight, or screenshot a tab with ⌃⇧C.</div>';
+        return;
+      }
+      let html = '', lastDay = null;
+      notes.forEach(n => {
+        const day = dayLabel(n.ts);
+        if (day !== lastDay) { html += `<div class="note-day">${day}</div>`; lastDay = day; }
+        const kind = n.kind === 'highlight' ? 'Highlight' : n.kind === 'screenshot' ? 'Screenshot' : 'Note';
+        const bodyHtml = n.body ? `<div class="note-body">${esc(n.body)}</div>`
+          : (n.hasImage ? '' : '<div class="note-body empty">No text</div>');
+        const host = srcHost(n.sourceUrl);
+        const srcLabel = n.sourceTitle ? esc(n.sourceTitle) : (host ? esc(host) : '');
+        const thumb = n.hasImage ? `<img class="note-thumb" data-img="${n.id}" alt="screenshot">` : '';
+        html += `<div class="note" data-id="${n.id}">
+          ${thumb}
+          <div class="note-main">
+            <div class="note-top"><span class="note-kind">${kind}</span><span class="note-time">${fmtNoteTime(n.ts)}</span></div>
+            ${bodyHtml}
+            <div class="note-src">
+              ${srcLabel ? `<span class="src-link" data-open="${esc(n.sourceUrl || '')}" title="Open source">${srcLabel}</span>` : '<span class="muted">No source</span>'}
+              <span class="src-del" data-del="${n.id}" title="Delete">✕</span>
+            </div>
+          </div>
+        </div>`;
+      });
+      list.innerHTML = html;
+      // Screenshots load lazily as data: URLs (the panel CSP allows img-src data:).
+      list.querySelectorAll('img[data-img]').forEach(async (img) => {
+        try { const u = await api.getNoteImage(Number(img.dataset.img)); if (u) img.src = u; } catch (_) {}
+      });
+      list.querySelectorAll('[data-open]').forEach(el => el.onclick = () => {
+        const u = el.dataset.open;
+        if (u && api.openSource) { api.openSource(u); if (api.hidePanel) api.hidePanel(); }
+      });
+      list.querySelectorAll('[data-del]').forEach(el => el.onclick = async () => {
+        try { await api.deleteNote(Number(el.dataset.del)); } catch (_) {}
+        loadNotes($('notes-search').value);
+      });
+    }
+
+    async function loadNotes(q) {
+      try {
+        const notes = (q && q.trim()) ? await api.searchNotes(q.trim()) : await api.listNotes();
+        renderNotes(notes);
+      } catch (e) {
+        $('notes-list').innerHTML = `<div class="obs-empty">Couldn't load notes: ${esc((e && e.message) || e)}</div>`;
+      }
+    }
+    async function openNotes() {
+      $('notes').classList.remove('hidden');
+      await loadNotes($('notes-search').value);
+    }
+
+    // ── Attention actions on the active tab (Present / Capture) ──
+    let presentOn = false;
+    async function togglePresent() {
+      presentOn = !presentOn;
+      try { await api.presentTab(presentOn); } catch (_) {}
+      const b = $('btn-present');
+      b.textContent = presentOn ? 'Exit focus' : 'Focus this tab';
+      b.classList.toggle('primary', presentOn);
+      if (presentOn && api.hidePanel) api.hidePanel();
+    }
+    async function captureThisTab() {
+      try { await api.captureTab(); } catch (_) {}
+      const b = $('btn-capture'), label = b.textContent;
+      b.textContent = 'Captured ✓';
+      setTimeout(() => { b.textContent = label; }, 1100);
+    }
+
     // ── Settings ──
     function setSeg(segEl, value) {
       segEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === value));
@@ -937,6 +1067,13 @@
       $('btn-settings').onclick = openSettings;
       $('btn-observer').onclick = openObserver;
       $('observer-close').onclick = () => $('observer').classList.add('hidden');
+      $('btn-notes').onclick = openNotes;
+      $('notes-close').onclick = () => $('notes').classList.add('hidden');
+      $('notes-search').addEventListener('input', (e) => {
+        clearTimeout(notesSearchTimer);
+        const v = e.target.value;
+        notesSearchTimer = setTimeout(() => loadNotes(v), 180);
+      });
 
       $('intent-save').onclick = () => setIntent($('intent-input').value.trim());
       $('intent-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') setIntent(e.target.value.trim()); });
@@ -951,6 +1088,8 @@
       $('toggle-pill').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-readlock').onclick = (e) => e.target.classList.toggle('on');
       $('btn-read').onclick = async () => { try { await api.enterReadMode(); } catch (_) {} if (api && api.hidePanel) api.hidePanel(); };
+      $('btn-present').onclick = togglePresent;
+      $('btn-capture').onclick = captureThisTab;
       $('rerun-onboarding').onclick = () => { $('settings').classList.add('hidden'); startOnboarding(); };
       $('btn-check-updates').onclick = checkForUpdates;
       $('btn-summon-shortcut').onclick = startSummonCapture;
@@ -975,9 +1114,11 @@
         if (e.key !== 'Escape') return;
         const settingsOpen = !$('settings').classList.contains('hidden');
         const observerOpen = !$('observer').classList.contains('hidden');
+        const notesOpen = !$('notes').classList.contains('hidden');
         const obOpen = !$('onboarding').classList.contains('hidden');
         if (settingsOpen) { $('settings').classList.add('hidden'); }
         else if (observerOpen) { $('observer').classList.add('hidden'); }
+        else if (notesOpen) { $('notes').classList.add('hidden'); }
         else if (obOpen) { /* keep onboarding modal */ }
         else if (api) { api.hidePanel(); }
       });
@@ -1011,6 +1152,10 @@
           lastSensing = s;
           renderObsLive();
           if (!$('observer').classList.contains('hidden')) refreshObserver();
+        });
+        // A capture landed → refresh the Notes view if it's open.
+        if (api.onNotesUpdated) api.onNotesUpdated(() => {
+          if (!$('notes').classList.contains('hidden')) loadNotes($('notes-search').value);
         });
         setInterval(renderUptime, 30000);
 

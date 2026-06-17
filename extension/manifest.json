@@ -34,12 +34,21 @@
     "toggle-read-mode": {
       "suggested_key": { "default": "Ctrl+Shift+R", "mac": "MacCtrl+Shift+R" },
       "description": "Read this page calmly (Amdion Read Mode)"
+    },
+    "capture-tab": {
+      "suggested_key": { "default": "Ctrl+Shift+C", "mac": "MacCtrl+Shift+C" },
+      "description": "Capture this tab to Amdion Notes (screenshot)"
     }
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content/nudge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/capture.js"],
       "run_at": "document_idle"
     },
     {

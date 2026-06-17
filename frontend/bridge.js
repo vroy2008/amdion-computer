@@ -23,6 +23,18 @@ if (window.__TAURI__) {
     enterReadMode: () => invoke('enter_read_mode'),
     exitReadMode: () => invoke('exit_read_mode'),
 
+    // ── Attention layer: present (the wrap) + capture the active tab ──
+    captureTab: () => invoke('capture_tab'),
+    presentTab: (on) => invoke('present_mode', { on }),
+    openSource: (url) => invoke('open_source', { url }),
+
+    // ── Amdion Notes: browse / search / render / delete captures ──
+    listNotes: (limit) => invoke('list_notes', { limit: limit || null }),
+    searchNotes: (q, limit) => invoke('search_notes', { q: q || '', limit: limit || null }),
+    getNoteImage: (id) => invoke('get_note_image', { id }),
+    deleteNote: (id) => invoke('delete_note', { id }),
+    onNotesUpdated: (cb) => listen('notes-updated', () => cb()),
+
     // ── Observer (Step 3): daily stats over the local event store ──
     getDailySummary: (date) => invoke('get_daily_summary', { date: date || null }),
     getSessions: (date) => invoke('get_sessions', { date: date || null }),

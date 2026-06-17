@@ -72,6 +72,8 @@ function handleMessage(data) {
     case 'close_tab': closeTab(msg.payload && msg.payload.tabId); break;
     case 'read_mode': applyReadMode(msg.payload || {}); break;
     case 'read_prefs': applyReadPrefs(msg.payload || {}); break;
+    case 'capture_tab': captureActiveTab(); break;
+    case 'present_mode': applyPresent(msg.payload || {}); break;
     default: break;
   }
 }
@@ -189,6 +191,60 @@ function applyReadPrefs(payload) {
 // The hotkey fires in the worker; relay it to whatever tab is in front.
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'toggle-read-mode') withActiveTab((id) => sendToTab(id, 'amdion-read-enter'));
+  else if (command === 'capture-tab') captureActiveTab();
+});
+
+// ── Attention layer: Capture + Present ──────────────────────────────────────
+//
+// Capture is content-agnostic and permission-free: a viewport screenshot
+// (chrome.tabs.captureVisibleTab) grabs rendered pixels, so it works even over
+// Chrome's built-in PDF viewer — the one surface content scripts can't reach.
+// Highlights/typed notes from normal pages arrive separately from content/
+// capture.js as 'amdion-capture'. Both funnel to the app as `note_captured`,
+// which the app persists on the reliable inbound bridge path.
+
+function captureActiveTab() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs && tabs[0];
+    if (!tab || !Number.isInteger(tab.windowId)) return;
+    chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, (dataUrl) => {
+      if (chrome.runtime.lastError || !dataUrl) return;
+      const url = tab.url || '';
+      const source = /\.pdf(\?|#|$)/i.test(url) || url.startsWith('file:') ? 'pdf' : 'web';
+      send({ type: 'note_captured', payload: { kind: 'screenshot', source, url, title: tab.title || '', image: dataUrl } });
+      flashBadge();
+    });
+  });
+}
+
+// Present: flip the active Chrome window to fullscreen (kills the tab strip +
+// menu bar — the content-agnostic "wrap") and raise the distraction lock,
+// reusing the Read-Mode wrap machinery. `on:false` restores both.
+async function applyPresent(payload) {
+  const on = payload.on !== false;
+  chrome.windows.getLastFocused({}, (w) => {
+    if (w && Number.isInteger(w.id)) {
+      chrome.windows.update(w.id, { state: on ? 'fullscreen' : 'normal' }, () => void chrome.runtime.lastError);
+    }
+  });
+  await setReadingLock(on);
+}
+
+function flashBadge() {
+  try {
+    chrome.action.setBadgeBackgroundColor({ color: '#2480ba' });
+    chrome.action.setBadgeText({ text: '✓' });
+    setTimeout(() => { try { chrome.action.setBadgeText({ text: '' }); } catch (_) {} }, 1200);
+  } catch (_) {}
+}
+
+// content/capture.js → app: a highlight (selected quote) or typed note from a
+// normal web page. We just relay it over the bridge as `note_captured`.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.type === 'amdion-capture') {
+    send({ type: 'note_captured', payload: msg.payload || {} });
+    flashBadge();
+  }
 });
 
 // content/reader.js → app + local wrap. We (a) forward read_started/read_ended
