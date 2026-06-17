@@ -104,6 +104,10 @@
     .intent-active .label { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; }
     .intent-active .text { font-size: 15px; margin-top: 3px; word-break: break-word; }
 
+    /* Quiet summon-shortcut hint (kept subtle so home stays calm) */
+    .home-hint { font-size: 11px; color: var(--muted); margin-top: 26px; letter-spacing: 0.02em; }
+    .home-hint .summon-kbd { color: var(--fg); opacity: 0.8; font-weight: 400; }
+
     /* Overlay views (settings / onboarding) fill the whole panel */
     .sheet { position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; z-index: 10; }
     .sheet-head {
@@ -262,6 +266,8 @@
     <div id="read-row" class="hidden" style="margin-top:22px;">
       <button class="btn ghost small" id="btn-read">Read this tab calmly</button>
     </div>
+
+    <div class="home-hint">Summon Amdion any time with <span class="summon-kbd">⌘⇧Space</span>.</div>
   </div>
 
   <!-- Settings -->
@@ -493,6 +499,9 @@
     // app restarts, instead of resetting to this process's start. Null until
     // the sensing engine has logged something today.
     let computerSinceMs = null;
+    // Local calendar day the anchor above was captured for, so the home counter
+    // rolls over at midnight even when the panel is left open across it.
+    let anchorDay = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -512,9 +521,25 @@
       return 'Good evening.';
     }
     function renderUptime() {
+      // Crossed midnight with the panel open → re-anchor to the new day so the
+      // "today" figure resets instead of climbing into yesterday's total.
+      if (anchorDay && anchorDay !== new Date().toDateString()) { anchorComputerSince(); return; }
       const since = computerSinceMs || state.sessionStartMs;
       const suffix = computerSinceMs ? 'today' : 'this session';
       $('uptime').textContent = `On your computer for ${fmtUptime(since)} ${suffix}`;
+    }
+
+    // Anchor (or re-anchor) the home counter to the first sensed event of today.
+    // Pulled from the Observer summary so it reflects real elapsed time, survives
+    // restarts, and resets cleanly at local midnight.
+    async function anchorComputerSince() {
+      anchorDay = new Date().toDateString();
+      try {
+        const summary = await api.getDailySummary();
+        computerSinceMs = (summary && summary.timeOnComputerMs > 0)
+          ? Date.now() - summary.timeOnComputerMs : null;
+      } catch (_) { computerSinceMs = null; }
+      renderUptime();
     }
 
     // ── Intent ──
@@ -972,10 +997,7 @@
 
         // Anchor the home uptime to the first sensed event of the day (real
         // time on computer), falling back to the process start until then.
-        try {
-          const summary = await api.getDailySummary();
-          if (summary && summary.timeOnComputerMs > 0) computerSinceMs = Date.now() - summary.timeOnComputerMs;
-        } catch (_) {}
+        await anchorComputerSince();
 
         wireEvents();
         updateSummonLabels();
