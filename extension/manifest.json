@@ -32,7 +32,7 @@
   },
   "commands": {
     "toggle-read-mode": {
-      "suggested_key": { "default": "Alt+Shift+R", "mac": "Alt+Shift+R" },
+      "suggested_key": { "default": "Ctrl+Shift+R", "mac": "MacCtrl+Shift+R" },
       "description": "Read this page calmly (Amdion Read Mode)"
     }
   },

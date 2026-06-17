@@ -8,7 +8,7 @@ It's not an OS replacement and not a browser you live inside. It's an attention 
 
 ## The four pillars
 
-- **The Interface** — a minimalist, text-only front door you summon with `⌘⇧Space`. Lives in the menu bar; no Dock icon, no window to manage.
+- **The Interface** — a minimalist, text-only front door you summon with `⌃⇧A`. Lives in the menu bar; no Dock icon, no window to manage.
 - **The Assistant** — chat (Gemini) that helps you act without diving into the distraction zone.
 - **The Coach** — rare, gentle, configurable friction. Off / Soft / Lock-In.
 - **The Observer** — passive session logging with honest daily stats and graphs.
@@ -32,7 +32,7 @@ npm install
 npm run dev          # builds + launches Amdion (first build takes a few minutes)
 ```
 
-An hourglass appears in your menu bar. Press **`⌘⇧Space`** to summon the panel.
+An hourglass appears in your menu bar. Press **`⌃⇧A`** to summon the panel.
 (For a standalone `.app` instead of dev mode, run `npm run build` and find it under `src-tauri/target/release/bundle/`.)
 
 **2. Connect Chrome** (the companion extension)
@@ -53,10 +53,10 @@ echo "GEMINI_API_KEY=your_key_here" > .env
 
 ## Using it
 
-- **Summon / dismiss** — `⌘⇧Space`, or click the menu-bar hourglass. Rebind the shortcut in **Settings → Advanced**.
+- **Summon / dismiss** — `⌃⇧A`, or click the menu-bar hourglass. Rebind the shortcut in **Settings → Advanced**.
 - **Set your attention** — type what you're here to do; Amdion greets you with it next session.
 - **Choose your friction** — **Settings → Attention**: **Off** just watches · **Soft** nudges you on distraction sites · **Lock-In** blocks them in Chrome.
-- **Read Mode** — on any article press **`⌥⇧R`** (or click the quiet **READ** pill) for a calm full-screen reader; distractions lock for the length of the read, and `Esc` leaves.
+- **Read Mode** — on any article press **`⌃⇧R`** (or click the quiet **READ** pill) for a calm full-screen reader; distractions lock for the length of the read, and `Esc` leaves.
 - **Today** — the bar-chart icon opens your honest daily log: time on computer, per-app and per-site breakdown, reading time. It resets each day.
 
 ## Status

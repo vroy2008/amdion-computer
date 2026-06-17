@@ -46,7 +46,7 @@ pub struct AppConfig {
 
     // ── Hotkeys ──
     /// Global "summon the panel" accelerator, in Tauri global-shortcut syntax
-    /// (e.g. "CommandOrControl+Shift+Space"). Rebindable in Settings → Advanced;
+    /// (e.g. "Control+Shift+A"). Rebindable in Settings → Advanced;
     /// applied live and re-registered on change (see commands/shortcut.rs).
     #[serde(rename = "summonShortcut", default = "default_summon_shortcut")]
     pub summon_shortcut: String,

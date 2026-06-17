@@ -2,7 +2,7 @@
 //
 // Amdion lives in the macOS menu bar (an Accessory app — no Dock icon). The
 // window starts hidden and is summoned by clicking the tray icon (panel drops
-// anchored under it) or pressing ⌘⇧Space. It auto-hides when it loses focus, so
+// anchored under it) or pressing ⌃⇧A. It auto-hides when it loses focus, so
 // it stays ephemeral. First run shows the window for onboarding.
 
 mod bridge_ws;
@@ -24,7 +24,10 @@ use tauri_plugin_global_shortcut::ShortcutState;
 /// Default summon shortcut: toggles the panel (show+focus, or hide if already
 /// up). User-rebindable at runtime (see `commands::shortcut`); this is the
 /// binding registered at launch and the fallback if a custom one won't bind.
-const SUMMON_SHORTCUT: &str = "CommandOrControl+Shift+Space";
+/// `Control` here is the physical ⌃ key on macOS (not ⌘) — we deliberately
+/// avoid Command, which collides with too many app/system shortcuts, and add
+/// Shift so a bare ⌃A doesn't shadow "jump to start of line" in text fields.
+const SUMMON_SHORTCUT: &str = "Control+Shift+A";
 
 /// Tray icon id, used to look the icon's screen rect back up for positioning.
 const TRAY_ID: &str = "amdion-tray";
@@ -50,7 +53,7 @@ fn tray_anchor(app: &tauri::AppHandle, scale: f64) -> Option<(f64, f64)> {
     Some(anchor_from_rect(&rect, scale))
 }
 
-/// Toggle the panel for the ⌘⇧Space summon: hide if it's already up, otherwise
+/// Toggle the panel for the ⌃⇧A summon: hide if it's already up, otherwise
 /// drop it anchored under the tray icon (falling back to its last position if
 /// the tray rect is unavailable).
 fn summon_panel(app: &tauri::AppHandle) {
@@ -137,7 +140,7 @@ fn monitor_under_cursor(_: &[tauri::Monitor]) -> Option<tauri::Monitor> {
 
 /// The display a tray-summoned panel should open on. Prefer the cursor's
 /// display (it's on the clicked icon); fall back to locating the icon anchor
-/// itself, then the window's current/primary display — so the ⌘⇧Space summon
+/// itself, then the window's current/primary display — so the ⌃⇧A summon
 /// (no click, cursor may be elsewhere) and non-macOS builds still get an answer.
 fn target_monitor(
     win: &tauri::WebviewWindow,

@@ -438,9 +438,9 @@
         .x { margin-left: 2px; opacity: .6; padding: 0 2px; }
         .x:hover { opacity: 1; }
       </style>
-      <div class="p" title="Read this calmly — ⌥⇧R (Amdion)">
+      <div class="p" title="Read this calmly — ⌃⇧R (Amdion)">
         <span class="dot">READ</span>
-        <span class="kbd">⌥⇧R</span>
+        <span class="kbd">⌃⇧R</span>
         <span class="x" data-x title="Hide">×</span>
       </div>`;
     sh.querySelector(".p").addEventListener("click", (e) => {

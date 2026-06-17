@@ -66,7 +66,7 @@ pub fn set_intent(
 }
 
 /// Hide the panel (Escape, or after finishing onboarding). The menu-bar icon
-/// or ⌘⇧Space brings it back.
+/// or ⌃⇧A brings it back.
 #[tauri::command]
 pub fn hide_panel(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("main") {

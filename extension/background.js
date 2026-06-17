@@ -153,7 +153,7 @@ async function rebuildBlockingRules(level, distractions) {
 // ── Read Mode: enter/exit the in-page reader ────────────────────────────────
 //
 // The reader lives in content/reader.js. Three triggers funnel here:
-//   • the Alt+Shift+R hotkey (chrome.commands, below),
+//   • the ⌃⇧R hotkey (chrome.commands `MacCtrl+Shift+R`, below),
 //   • the app's "Read this tab" (App→Ext `read_mode`), and
 //   • the in-page pill (handled entirely in the content script).
 // We just tell the right tab to enter/exit; the content script does the rest.

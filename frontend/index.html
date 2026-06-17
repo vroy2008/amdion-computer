@@ -87,7 +87,7 @@
     .view { flex: 1; overflow-y: auto; }
 
     /* Home */
-    #home { padding: 26px 22px; }
+    #home { padding: 26px 22px; display: flex; flex-direction: column; }
     .uptime { font-size: 12px; color: var(--muted); letter-spacing: 0.03em; }
     .greeting { font-size: 23px; font-weight: 300; margin: 8px 0 22px; }
     .greeting.error { font-size: 14px; color: var(--err); }
@@ -104,9 +104,12 @@
     .intent-active .label { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; }
     .intent-active .text { font-size: 15px; margin-top: 3px; word-break: break-word; }
 
-    /* Quiet summon-shortcut hint (kept subtle so home stays calm) */
-    .home-hint { font-size: 11px; color: var(--muted); margin-top: 26px; letter-spacing: 0.02em; }
+    /* Quiet summon-shortcut hint, pinned to the bottom of the panel (kept subtle so home stays calm) */
+    .home-hint { font-size: 11px; color: var(--muted); margin-top: auto; padding-top: 26px; letter-spacing: 0.02em; }
     .home-hint .summon-kbd { color: var(--fg); opacity: 0.8; font-weight: 400; }
+    /* Explicit glyph→key legend so ⇧ isn't misread as the up arrow */
+    .home-hint-keys { margin-top: 6px; }
+    .home-hint-keys .sep { opacity: 0.4; margin: 0 7px; }
 
     /* Overlay views (settings / onboarding) fill the whole panel */
     .sheet { position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; z-index: 10; }
@@ -267,7 +270,9 @@
       <button class="btn ghost small" id="btn-read">Read this tab calmly</button>
     </div>
 
-    <div class="home-hint">Summon Amdion any time with <span class="summon-kbd">⌘⇧Space</span>.</div>
+    <div class="home-hint">Summon Amdion any time with <span class="summon-kbd">⌃⇧A</span>.
+      <div class="home-hint-keys"><span class="summon-kbd">⌃</span> Control<span class="sep">·</span><span class="summon-kbd">⇧</span> Shift<span class="sep">·</span><span class="summon-kbd">A</span></div>
+    </div>
   </div>
 
   <!-- Settings -->
@@ -324,7 +329,7 @@
           </div>
         </div>
         <div class="row">
-          <div><div class="label-main">Show &ldquo;Read&rdquo; pill</div><div class="label-sub">A quiet prompt on article pages. The &#8997;&#8679;R hotkey works either way.</div></div>
+          <div><div class="label-main">Show &ldquo;Read&rdquo; pill</div><div class="label-sub">A quiet prompt on article pages. The ⌃⇧R hotkey works either way.</div></div>
           <button class="toggle" id="toggle-pill"></button>
         </div>
         <div class="row">
@@ -351,7 +356,7 @@
 
           <div class="row" style="margin-top:18px;">
             <div><div class="label-main">Summon shortcut</div><div class="label-sub">Show or hide the Amdion panel from anywhere.</div></div>
-            <button class="btn ghost small" id="btn-summon-shortcut" style="white-space:nowrap; min-width:104px;">⌘⇧Space</button>
+            <button class="btn ghost small" id="btn-summon-shortcut" style="white-space:nowrap; min-width:104px;">⌃⇧A</button>
           </div>
           <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.6;">
             <span id="summon-shortcut-hint">Click the shortcut, then press the keys you want — include at least one of ⌘ ⌥ ⌃ ⇧.</span>
@@ -360,7 +365,7 @@
 
           <div class="row" style="margin-top:16px;">
             <div><div class="label-main">Read Mode shortcut</div><div class="label-sub">Toggle the in-page reader. Owned by Chrome, not Amdion.</div></div>
-            <span class="muted" style="font-size:12px; white-space:nowrap;">⌥⇧R</span>
+            <span class="muted" style="font-size:12px; white-space:nowrap;">⌃⇧R</span>
           </div>
           <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.6;">Change it on Chrome's shortcuts page: <code>chrome://extensions/shortcuts</code>.</div>
           <label class="field" style="margin-top:14px;">Block list — your distractions, one per line (on top of the built-ins)</label>
@@ -440,7 +445,7 @@
           then gets out of your way. Everything stays local on your device.
         </p>
         <p class="ob-welcome" style="margin-top:14px;">
-          Summon it any time with <b class="summon-kbd">⌘⇧Space</b> or the menu-bar icon.
+          Summon it any time with <b class="summon-kbd">⌃⇧A</b> or the menu-bar icon.
         </p>
       </div>
 
@@ -475,7 +480,7 @@
 
       <!-- Step 3: done -->
       <div class="ob-step hidden" data-step="3">
-        <p class="ob-welcome">You're set. <b>Amdion is now in your menu bar</b> — click the icon or press <span class="summon-kbd">⌘⇧Space</span> whenever you want it.</p>
+        <p class="ob-welcome">You're set. <b>Amdion is now in your menu bar</b> — click the icon or press <span class="summon-kbd">⌃⇧A</span> whenever you want it.</p>
         <p class="ob-welcome" style="margin-top:12px;">More tuning, your API key, and attention settings live behind the gear.</p>
       </div>
     </div>
@@ -764,10 +769,10 @@
     }
 
     // ── Summon shortcut (global hotkey) ──
-    // The backend stores a Tauri accelerator string (e.g.
-    // "CommandOrControl+Shift+Space"); the panel shows the mac glyphs and
-    // captures a new combo from a keydown, re-registering it via the backend.
-    const SUMMON_DEFAULT = 'CommandOrControl+Shift+Space';
+    // The backend stores a Tauri accelerator string (e.g. "Control+Shift+A");
+    // the panel shows the mac glyphs and captures a new combo from a keydown,
+    // re-registering it via the backend. Must match SUMMON_SHORTCUT in lib.rs.
+    const SUMMON_DEFAULT = 'Control+Shift+A';
     const SUMMON_HINT = 'Click the shortcut, then press the keys you want — include at least one of ⌘ ⌥ ⌃ ⇧.';
     let capturingSummon = false;
 
