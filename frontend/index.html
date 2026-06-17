@@ -107,9 +107,6 @@
     /* Quiet summon-shortcut hint, pinned to the bottom of the panel (kept subtle so home stays calm) */
     .home-hint { font-size: 11px; color: var(--muted); margin-top: auto; padding-top: 26px; letter-spacing: 0.02em; }
     .home-hint .summon-kbd { color: var(--fg); opacity: 0.8; font-weight: 400; }
-    /* Explicit glyph→key legend so ⇧ isn't misread as the up arrow */
-    .home-hint-keys { margin-top: 6px; }
-    .home-hint-keys .sep { opacity: 0.4; margin: 0 7px; }
 
     /* Overlay views (settings / onboarding) fill the whole panel */
     .sheet { position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; z-index: 10; }
@@ -270,9 +267,7 @@
       <button class="btn ghost small" id="btn-read">Read this tab calmly</button>
     </div>
 
-    <div class="home-hint">Summon Amdion any time with <span class="summon-kbd">⌃⇧A</span>.
-      <div class="home-hint-keys"><span class="summon-kbd">⌃</span> Control<span class="sep">·</span><span class="summon-kbd">⇧</span> Shift<span class="sep">·</span><span class="summon-kbd">A</span></div>
-    </div>
+    <div class="home-hint">Summon Amdion any time with <span class="summon-kbd">⌃⇧A</span> — Control + Shift + A.</div>
   </div>
 
   <!-- Settings -->
