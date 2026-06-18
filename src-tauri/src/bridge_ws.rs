@@ -170,6 +170,13 @@ async fn handle_conn(
                         // broadcast reaches our own freshly-subscribed `rx`.
                         let _ = tx.send(friction_message());
                         let _ = tx.send(read_prefs_message());
+                        let _ = tx.send(reshape_message());
+                        // The current session intent (in-memory, not config) so
+                        // in-page nudge copy can adapt right away.
+                        if let Some(state) = app.try_state::<AppState>() {
+                            let intent = state.data.lock().unwrap().intent.clone();
+                            let _ = tx.send(intent_message(intent.as_deref()));
+                        }
                     } else {
                         break; // refuse pre-auth traffic
                     }
@@ -344,10 +351,43 @@ pub fn read_prefs_message() -> String {
             "size": r.size,
             "wpm": r.wpm,
             "pillEnabled": r.pill_enabled,
+            // Offer one-tap Present on long non-article pages once settled.
+            "presentOffer": r.present_offer,
             // The extension applies "the wrap" (lock distractions during a read);
             // the focus-shortcut names stay app-side and aren't forwarded.
             "lockTabs": r.lock_tabs,
         },
+    })
+    .to_string()
+}
+
+/// The current reshape config as an App→Ext `reshape` message. The extension
+/// stores the payload at chrome.storage.local "reshape"; content/reshape.js
+/// reads it and applies the `html.amdion-reshape` gate (plus the `amdion-feedfade`
+/// / `amdion-yt-home` sub-flags) every reshaping item — CSS and JS — keys off.
+pub fn reshape_message() -> String {
+    let r = read_config().reshape;
+    serde_json::json!({
+        "type": "reshape",
+        "payload": {
+            "enabled": r.enabled,
+            "disabledSites": r.disabled_sites,
+            "feedFade": r.feed_fade,
+            "hideYoutubeHome": r.hide_youtube_home,
+        },
+    })
+    .to_string()
+}
+
+/// The current session intent as an App→Ext `intent` message (or null to clear).
+/// content/nudge.js reads chrome.storage.local "intent" to adapt its copy
+/// ("You're here for X — is HOST part of that?"). Intent is in-memory session
+/// state, not config, so this is pushed on `set_intent` and at connect — never
+/// persisted to disk.
+pub fn intent_message(intent: Option<&str>) -> String {
+    serde_json::json!({
+        "type": "intent",
+        "payload": { "intent": intent },
     })
     .to_string()
 }

@@ -44,6 +44,14 @@ pub struct AppConfig {
     #[serde(default)]
     pub reading: ReadingPrefs,
 
+    // ── Reshape (Phase 2) ──
+    /// Per-site "calm the trap" reshaping — declutter + feed-fade + the in-page
+    /// behavioral nudges. A switch independent of the friction level: a site can
+    /// be calmed even in Off mode (see docs/REORIENTATION.md §9). Mirrored to the
+    /// extension's chrome.storage.local "reshape".
+    #[serde(default)]
+    pub reshape: ReshapeConfig,
+
     // ── Hotkeys ──
     /// Global "summon the panel" accelerator, in Tauri global-shortcut syntax
     /// (e.g. "Control+Shift+A"). Rebindable in Settings → Advanced;
@@ -72,6 +80,11 @@ pub struct ReadingPrefs {
     /// Show the quiet in-page "Read" pill on article-like pages.
     #[serde(rename = "pillEnabled", default = "default_true")]
     pub pill_enabled: bool,
+    /// Offer a one-tap "Present" (fullscreen + the wrap) on long non-article
+    /// pages once reading/work has visibly settled. Opt-in; default OFF — the
+    /// offer is ambient but never auto-engages (see docs/REORIENTATION.md §9).
+    #[serde(rename = "presentOffer", default)]
+    pub present_offer: bool,
     /// "The wrap": block your distraction sites in Chrome for the duration of a
     /// read, then restore your normal friction level on exit. Snapshot/restore
     /// is implicit — the extension layers a Lock-In over your base level while
@@ -89,6 +102,48 @@ pub struct ReadingPrefs {
     pub focus_shortcut_end: String,
 }
 
+/// Reshape preferences. Governs all in-page "calm the trap" behaviour — the
+/// `declutter.css` decorations, feed-fade, and the behavioral nudges
+/// (over-scroll / redirect-chase / idle-return / YouTube drift). Pushed to the
+/// extension (chrome.storage.local "reshape"); content/reshape.js applies the
+/// `html.amdion-reshape` gate every reshaping item keys off.
+///
+/// Default-on for the known trap sites (so there's no regression from the
+/// always-on declutter that shipped) via an *opt-out* `disabled_sites` list:
+/// a site absent from the list is reshaped. The aggressive feed-hiding items
+/// (`feed_fade`, `hide_youtube_home`) default OFF and are opt-in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReshapeConfig {
+    /// Master switch for all reshaping. On by default; off disables every
+    /// in-page decoration and behavioral nudge at once (the global escape hatch).
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Domains the user has explicitly turned reshaping OFF for. Stored as an
+    /// opt-out set so a known trap site stays calmed by default and new built-in
+    /// sites need no migration.
+    #[serde(rename = "disabledSites", default)]
+    pub disabled_sites: Vec<String>,
+    /// Feed-fade: opacity-fade the bottomless feed past the fold (X / LinkedIn).
+    /// Experiment-tier; default OFF (aggressive feed-hiding is opt-in, §6).
+    #[serde(rename = "feedFade", default)]
+    pub feed_fade: bool,
+    /// Hide the YouTube algorithmic home grid (search / Subscriptions stay).
+    /// Opt-in; default OFF.
+    #[serde(rename = "hideYoutubeHome", default)]
+    pub hide_youtube_home: bool,
+}
+
+impl Default for ReshapeConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            disabled_sites: Vec::new(),
+            feed_fade: false,
+            hide_youtube_home: false,
+        }
+    }
+}
+
 impl Default for ReadingPrefs {
     fn default() -> Self {
         Self {
@@ -97,6 +152,7 @@ impl Default for ReadingPrefs {
             size: default_read_size(),
             wpm: default_wpm(),
             pill_enabled: true,
+            present_offer: false,
             lock_tabs: true,
             focus_shortcut_start: String::new(),
             focus_shortcut_end: String::new(),
@@ -160,6 +216,7 @@ impl Default for AppConfig {
             block_list: Vec::new(),
             autostart: true,
             reading: ReadingPrefs::default(),
+            reshape: ReshapeConfig::default(),
             summon_shortcut: default_summon_shortcut(),
         }
     }

@@ -43,6 +43,11 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
+      "js": ["content/reshape.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["<all_urls>"],
       "js": ["content/nudge.js"],
       "run_at": "document_idle"
     },
@@ -58,6 +63,20 @@
         "content/vendor/readability-readerable.js",
         "content/reader.js"
       ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.x.com/*",
+        "*://*.twitter.com/*",
+        "*://*.linkedin.com/*"
+      ],
+      "js": ["content/feedfade.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content/ytdrift.js"],
       "run_at": "document_idle"
     },
     {

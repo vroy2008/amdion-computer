@@ -35,6 +35,7 @@
     size: 3, // 1..5
     wpm: 240, // for the "N min left" estimate
     pillEnabled: true, // the quiet in-page "Read" affordance
+    presentOffer: false, // offer one-tap Present on long non-article pages (opt-in)
   };
 
   // Warm-paper / light / dark palettes. Sepia is the default — it's the whole
@@ -52,6 +53,7 @@
   const SANS = `-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif`;
 
   const HOST_URL = location.href;
+  const HOST = location.hostname.replace(/^www\./, "");
   const POS_KEY = "amdion_read_pos"; // map of url → scroll fraction (resume)
 
   // ── Module state ────────────────────────────────────────────────────────
@@ -60,9 +62,17 @@
   let shadow = null;
   let scroller = null; // the scrolling article column
   let pill = null; // the quiet "Read" affordance
+  let presentPill = null; // the quiet "Present" affordance (long non-article pages)
+  let distractions = []; // hosts we never offer Read / Present on
+  let armed = false; // the dwell+scroll settle trigger has been armed
+  let offered = false; // the settle moment has passed and we've offered once
+  let pillDismissed = false; // user closed the pill via × (this page load only)
   let startedAt = 0;
   let maxPct = 0; // furthest-read fraction this session
   let controlsTimer = 0;
+
+  const onDistraction = () =>
+    (distractions || []).some((d) => HOST === d || HOST.endsWith("." + d));
 
   const isOpen = () => !!host;
 
@@ -419,6 +429,7 @@
   // ── The quiet "Read" pill ──────────────────────────────────────────────────
   function maybeShowPill() {
     if (!EXT || pill || isOpen() || !prefs.pillEnabled) return;
+    if (onDistraction()) return; // never offer the reader on a feed/distraction
     if (typeof isProbablyReaderable === "undefined" || !isProbablyReaderable(document)) return;
     pill = document.createElement("div");
     pill.style.cssText = "all: initial; position: fixed; top: 20px; right: 20px; z-index: 2147483645;";
@@ -446,7 +457,8 @@
     sh.querySelector(".p").addEventListener("click", (e) => {
       if (e.target.hasAttribute("data-x")) {
         // Dismiss for this page load only; the toggle in settings turns it off
-        // for good.
+        // for good. Remember the dismissal so a prefs sync won't re-show it.
+        pillDismissed = true;
         pill.remove();
         pill = null;
         return;
@@ -456,11 +468,101 @@
     document.body.appendChild(pill);
   }
 
+  // ── The quiet "Present" pill (long, non-article pages) ─────────────────────
+  // Present's fullscreen+wrap is the right calm for a long dashboard / PDF / doc
+  // that Read Mode can't reformat. Offered — never auto-engaged — once reading or
+  // work has visibly settled. Opt-in (prefs.presentOffer); suppressed on feeds.
+  function isLongPage() {
+    return (document.documentElement.scrollHeight || 0) > window.innerHeight * 2.2;
+  }
+  function enterPresent() {
+    try {
+      EXT.runtime.sendMessage({ type: "amdion-present" }, () => void chrome.runtime.lastError);
+    } catch (_) {}
+  }
+  function maybeShowPresent() {
+    if (!EXT || presentPill || pill || isOpen() || onDistraction()) return;
+    presentPill = document.createElement("div");
+    presentPill.style.cssText = "all: initial; position: fixed; top: 20px; right: 20px; z-index: 2147483645;";
+    const sh = presentPill.attachShadow({ mode: "open" });
+    sh.innerHTML = `
+      <style>
+        .p { display: flex; align-items: center; gap: 8px; cursor: pointer;
+             font: 600 13px ${SANS}; color: #f5f5f5; background: rgba(18,18,18,.9);
+             border: 1px solid rgba(255,255,255,.14); border-radius: 999px;
+             padding: 9px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.4);
+             backdrop-filter: blur(10px); opacity: .55; transition: opacity .18s, transform .18s; }
+        .p:hover { opacity: 1; transform: translateY(-1px); }
+        .dot { font: 600 9px ${SANS}; letter-spacing: .2em; color: #2480ba; }
+        .x { margin-left: 2px; opacity: .6; padding: 0 2px; }
+        .x:hover { opacity: 1; }
+      </style>
+      <div class="p" title="Present this page — fullscreen, distractions locked (Amdion)">
+        <span class="dot">PRESENT</span>
+        <span class="x" data-x title="Hide">×</span>
+      </div>`;
+    sh.querySelector(".p").addEventListener("click", (e) => {
+      if (e.target.hasAttribute("data-x")) {
+        pillDismissed = true;
+        presentPill.remove();
+        presentPill = null;
+        return;
+      }
+      enterPresent();
+      presentPill.remove();
+      presentPill = null;
+    });
+    document.body.appendChild(presentPill);
+  }
+
+  // Offer the right affordance for *this* page: the reader on an article, else a
+  // Present offer on a long non-article page (opt-in). Suppressed on feeds.
+  function offerNow() {
+    offered = true; // the settle moment has elapsed; we've made an offer decision
+    if (isOpen() || onDistraction()) return;
+    const readerable = typeof isProbablyReaderable !== "undefined" && (() => {
+      try { return isProbablyReaderable(document); } catch (_) { return false; }
+    })();
+    if (readerable) maybeShowPill();
+    else if (prefs.presentOffer && isLongPage()) maybeShowPresent();
+  }
+
+  // Arm the settle trigger: offer once the reader has visibly settled in — after
+  // a short dwell AND the first scroll, or a longer fallback for a short page
+  // that fits without scrolling — so we don't offer on every glance.
+  function arm() {
+    if (armed) return;
+    armed = true;
+    const DWELL = 1200, FALLBACK = 6000;
+    const at = Date.now();
+    let done = false;
+    const fire = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("scroll", onFirstScroll);
+      clearTimeout(fb);
+      offerNow();
+    };
+    const onFirstScroll = () => { if (Date.now() - at >= DWELL) fire(); };
+    window.addEventListener("scroll", onFirstScroll, { passive: true });
+    const fb = setTimeout(fire, FALLBACK);
+  }
+
+  function loadDistractions() {
+    return new Promise((resolve) => {
+      if (!EXT) return resolve();
+      EXT.storage.local.get(["distractions"], (r) => {
+        distractions = (r && r.distractions) || [];
+        resolve();
+      });
+    });
+  }
+
   // ── Wiring ────────────────────────────────────────────────────────────────
   function boot() {
-    loadPrefs().then((p) => {
+    Promise.all([loadPrefs(), loadDistractions()]).then(([p]) => {
       prefs = p;
-      maybeShowPill();
+      arm();
     });
     // Triggers from the hotkey (chrome.commands) and the app ("Read this tab")
     // both arrive as a runtime message routed by background.js to this tab.
@@ -469,12 +571,19 @@
       if (msg.type === "amdion-read-enter") enter();
       else if (msg.type === "amdion-read-exit") close();
     });
-    // Live-apply preference changes made from the Amdion panel.
+    // Live-apply preference changes made from the Amdion panel; keep the
+    // distraction set current for the Read / Present suppression.
     EXT.storage.onChanged.addListener((changes, area) => {
-      if (area !== "local" || !changes[PREFS_KEY]) return;
-      prefs = { ...DEFAULT_PREFS, ...changes[PREFS_KEY].newValue };
-      if (isOpen()) applyPrefs();
-      else maybeShowPill();
+      if (area !== "local") return;
+      if (changes.distractions) distractions = changes.distractions.newValue || [];
+      if (changes[PREFS_KEY]) {
+        prefs = { ...DEFAULT_PREFS, ...changes[PREFS_KEY].newValue };
+        if (isOpen()) applyPrefs();
+        // Re-offer only after the settle moment passed and only if the user
+        // hasn't dismissed the pill — never let a panel sync jump the dwell gate
+        // or resurrect a dismissed pill.
+        else if (offered && !pillDismissed) offerNow();
+      }
     });
     // Don't leave a dangling reading session if the tab navigates/closes mid-read.
     window.addEventListener("beforeunload", () => {

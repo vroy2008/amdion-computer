@@ -102,6 +102,12 @@ pub fn set_intent(
             db.insert_event("session_intent", "app", None, None, Some(&meta));
         }
     }
+    // Push the intent to the extension so in-page nudge copy can adapt
+    // ("You're here for X — is HOST part of that?"). Clearing it (`None`) sends a
+    // null so the extension drops the adaptive copy. No-op if nothing's connected.
+    let _ = state
+        .bridge_tx
+        .send(crate::bridge_ws::intent_message(cleaned.as_deref()));
     Ok(emit_state(&app, &state))
 }
 

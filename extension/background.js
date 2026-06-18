@@ -24,6 +24,12 @@ const BUILTIN_DISTRACTIONS = [
   'reddit.com', 'tiktok.com', 'netflix.com', 'twitch.tv',
 ];
 
+// Reshape defaults (the per-site "calm the trap" layer — see config.rs
+// ReshapeConfig). Default-on for known trap sites via an opt-out list; the
+// aggressive feed-hiding items default off. Seeded on install so content
+// scripts have it before the app first connects; the app overwrites on connect.
+const DEFAULT_RESHAPE = { enabled: true, disabledSites: [], feedFade: false, hideYoutubeHome: false };
+
 // Reserved id range for our dynamic blocking rules, so we only ever remove ours.
 const RULE_BASE = 9000;
 const KEEPALIVE = 'amdion-keepalive';
@@ -117,6 +123,8 @@ function handleMessage(data) {
     case 'close_tab': closeTab(msg.payload && msg.payload.tabId); break;
     case 'read_mode': applyReadMode(msg.payload || {}); break;
     case 'read_prefs': applyReadPrefs(msg.payload || {}); break;
+    case 'reshape': applyReshape(msg.payload || {}); break;
+    case 'intent': applyIntent(msg.payload || {}); break;
     case 'capture_tab': captureActiveTab(); break;
     case 'present_mode': applyPresent(msg.payload || {}); break;
     default: break;
@@ -195,6 +203,99 @@ async function rebuildBlockingRules(level, distractions) {
     }));
   }
   await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: ourIds, addRules });
+}
+
+// ── Reshape + behavioral nudge signals (Phase 2) ────────────────────────────
+//
+// Reshape is the per-site "calm the trap" layer, independent of the friction
+// level (docs/REORIENTATION.md §9). The app pushes the config; we mirror it into
+// chrome.storage.local where content/reshape.js (the gate) and the behavioral
+// scripts read it. The two background-only signals — redirect-chase and
+// idle-return — live here because the qualifiers / idle transitions are only
+// visible in the worker; we hand them to content/nudge.js as a runtime message.
+
+function applyReshape(payload) {
+  const reshape = {
+    enabled: payload.enabled !== false,
+    disabledSites: Array.isArray(payload.disabledSites) ? payload.disabledSites : [],
+    feedFade: !!payload.feedFade,
+    hideYoutubeHome: !!payload.hideYoutubeHome,
+  };
+  chrome.storage.local.set({ reshape });
+}
+
+function applyIntent(payload) {
+  const raw = payload && typeof payload.intent === 'string' ? payload.intent.trim() : '';
+  chrome.storage.local.set({ intent: raw || null });
+}
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return ''; }
+}
+
+function onDistraction(host, distractions) {
+  if (!host) return false;
+  return (distractions || []).some((d) => host === d || host.endsWith('.' + d));
+}
+
+// Is this host currently reshaped? Reshaping applies to the distraction set
+// (built-ins ∪ the user's block list) when the master switch is on and the site
+// hasn't been opted out. twitter.com canonicalizes to x.com so one toggle covers
+// both. Mirrors content/reshape.js so background-driven nudges agree with it.
+function isReshaped(host, reshape, distractions) {
+  if (!host || !reshape || reshape.enabled === false) return false;
+  const canon = host === 'twitter.com' || host.endsWith('.twitter.com') ? 'x.com' : host;
+  const disabled = (reshape.disabledSites || []).some(
+    (d) => host === d || host.endsWith('.' + d) || canon === d
+  );
+  if (disabled) return false;
+  return onDistraction(host, distractions);
+}
+
+// Tell content/nudge.js to show a behavioral nudge (over-scroll lives in the
+// content script; redirect / idle-return are driven from here). Best-effort: a
+// missing receiver (no content script yet) just no-ops.
+function sendNudge(tabId, reason) {
+  if (!Number.isInteger(tabId)) return;
+  chrome.tabs.sendMessage(tabId, { type: 'amdion-nudge', reason }, () => void chrome.runtime.lastError);
+}
+
+// Redirect / ad-chase → "hold for later". Fires only on a true client/server
+// redirect landing on a reshape-on distraction — not on plain link clicks (the
+// deliberately-deferred link-hop half, §5). nudge.js shows once per page load.
+async function maybeRedirectNudge(d) {
+  const quals = d.transitionQualifiers || [];
+  if (!quals.includes('client_redirect') && !quals.includes('server_redirect')) return;
+  const host = hostOf(d.url);
+  const { reshape, distractions } = await chrome.storage.local.get(['reshape', 'distractions']);
+  if (!isReshaped(host, reshape || DEFAULT_RESHAPE, distractions || BUILTIN_DISTRACTIONS)) return;
+  // The content script lands at document_idle; give it a beat to register its
+  // message listener, then RE-VALIDATE the tab still shows a reshaped distraction
+  // before signaling (it may have navigated away in the interim — the content
+  // side trusts us and doesn't re-check).
+  setTimeout(async () => {
+    if (!Number.isInteger(d.tabId)) return;
+    let tab;
+    try { tab = await chrome.tabs.get(d.tabId); } catch (_) { return; }
+    if (!tab) return;
+    const cur = await chrome.storage.local.get(['reshape', 'distractions']);
+    if (isReshaped(hostOf(tab.url || ''), cur.reshape || DEFAULT_RESHAPE, cur.distractions || BUILTIN_DISTRACTIONS)) {
+      sendNudge(d.tabId, 'redirect');
+    }
+  }, 700);
+}
+
+// Idle-return re-anchor: coming back from idle/lock onto an already-open
+// distraction tab, re-offer the nudge once.
+let lastIdleState = 'active';
+async function maybeIdleReturnNudge() {
+  const { reshape, distractions } = await chrome.storage.local.get(['reshape', 'distractions']);
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const tab = tabs && tabs[0];
+  if (!tab || !Number.isInteger(tab.id)) return;
+  const host = hostOf(tab.url || '');
+  if (!isReshaped(host, reshape || DEFAULT_RESHAPE, distractions || BUILTIN_DISTRACTIONS)) return;
+  sendNudge(tab.id, 'idle-return');
 }
 
 // ── Read Mode: enter/exit the in-page reader ────────────────────────────────
@@ -292,6 +393,13 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
+// content/reader.js → the in-page "Present" offer: enter Present (fullscreen +
+// the wrap) for this window. Same action the app's present_mode drives, just
+// initiated from the page once a long task has settled.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.type === 'amdion-present') applyPresent({ on: true });
+});
+
 // content/reader.js → app + local wrap. We (a) forward read_started/read_ended
 // over the bridge so the app can log reading time and run an optional Focus
 // Shortcut, and (b) apply the lock-distractions half of the wrap right here, so
@@ -324,11 +432,20 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
   chrome.tabs.get(tabId, (t) => { if (!chrome.runtime.lastError && t) send({ type: 'tab_activated', payload: tabInfo(t) }); });
 });
 chrome.webNavigation.onCommitted.addListener((d) => {
-  if (d.frameId === 0) send({ type: 'tab_navigated', payload: { tabId: d.tabId, url: d.url } });
+  if (d.frameId !== 0) return;
+  send({ type: 'tab_navigated', payload: { tabId: d.tabId, url: d.url } });
+  maybeRedirectNudge(d); // redirect/ad-chase → hold-for-later (reshape-gated)
 });
 
 chrome.idle.setDetectionInterval(60);
-chrome.idle.onStateChanged.addListener((state) => send({ type: 'idle_state', payload: { state } }));
+chrome.idle.onStateChanged.addListener((state) => {
+  send({ type: 'idle_state', payload: { state } });
+  // Returning to the keyboard after a break, onto an open distraction → re-anchor.
+  if (state === 'active' && (lastIdleState === 'idle' || lastIdleState === 'locked')) {
+    maybeIdleReturnNudge();
+  }
+  lastIdleState = state;
+});
 
 // ── Keepalive + lifecycle ─────────────────────────────────────────────────
 
@@ -354,7 +471,13 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.runtime.onInstalled.addListener(() => {
   // Seed defaults so content scripts have the distraction set before the app
   // first connects (level stays off → no nudge until the app says otherwise).
-  chrome.storage.local.set({ friction: { level: 'off', blockList: [] }, distractions: BUILTIN_DISTRACTIONS, readingLock: false });
+  chrome.storage.local.set({
+    friction: { level: 'off', blockList: [] },
+    distractions: BUILTIN_DISTRACTIONS,
+    readingLock: false,
+    reshape: DEFAULT_RESHAPE,
+    intent: null,
+  });
   connect();
   chrome.tabs.create({ url: chrome.runtime.getURL('walkthrough.html') });
 });

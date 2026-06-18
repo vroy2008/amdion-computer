@@ -1,12 +1,20 @@
-/* Amdion declutter — quiet a couple of high-pull surfaces. This is the example
-   "decorate" layer; it's reversible by disabling the extension. Selectors are
-   best-effort and may drift as these sites change their markup. */
+/* Amdion declutter — quiet a few high-pull surfaces. The example "decorate"
+   layer; reversible by disabling the extension or turning reshaping off.
+   Selectors are best-effort and may drift; every rule is fail-safe (it hides
+   nothing if the site renames its markup).
+
+   GATE: every rule is scoped under `html.amdion-reshape`, the class
+   content/reshape.js adds when this site is reshaped (per-site, default-on for
+   the distraction set — see docs/REORIENTATION.md §9). So declutter is now
+   toggle-governed instead of always-on, with no regression for its current
+   domains. The opt-in YouTube home grid is additionally gated on
+   `html.amdion-yt-home`. */
 
 /* YouTube — hide Shorts shelves (endless short-form is a classic attention trap). */
-ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),
-ytd-reel-shelf-renderer,
-ytd-guide-entry-renderer:has(a[title="Shorts"]),
-ytd-mini-guide-entry-renderer[aria-label="Shorts"] {
+html.amdion-reshape ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),
+html.amdion-reshape ytd-reel-shelf-renderer,
+html.amdion-reshape ytd-guide-entry-renderer:has(a[title="Shorts"]),
+html.amdion-reshape ytd-mini-guide-entry-renderer[aria-label="Shorts"] {
   display: none !important;
 }
 
@@ -15,16 +23,24 @@ ytd-mini-guide-entry-renderer[aria-label="Shorts"] {
    Subscriptions are untouched; a playlist panel (a separate element) survives.
    NOTE: CSS hides the rail but can't stop player autoplay-at-source (a separate
    scripted change — see REORIENTATION §6). */
-ytd-watch-next-secondary-results-renderer,
-.ytp-ce-element,
-.ytp-endscreen-content {
+html.amdion-reshape ytd-watch-next-secondary-results-renderer,
+html.amdion-reshape .ytp-ce-element,
+html.amdion-reshape .ytp-endscreen-content {
+  display: none !important;
+}
+
+/* YouTube — hide the algorithmic home grid. OPT-IN (default off): only when the
+   user enabled "hide YouTube home". Scoped strictly to the home browse subtype,
+   so search, Subscriptions, and channel pages are untouched; empty space, no
+   custom homepage UI. */
+html.amdion-reshape.amdion-yt-home ytd-browse[page-subtype="home"] ytd-rich-grid-renderer {
   display: none !important;
 }
 
 /* X / Twitter — hide the "Trending"/"What's happening" and "Who to follow"
    modules in the right column, keeping the search box. */
-[data-testid="sidebarColumn"] [aria-label="Timeline: Trending now"],
-[data-testid="sidebarColumn"] [aria-label="Who to follow"] {
+html.amdion-reshape [data-testid="sidebarColumn"] [aria-label="Timeline: Trending now"],
+html.amdion-reshape [data-testid="sidebarColumn"] [aria-label="Who to follow"] {
   display: none !important;
 }
 
@@ -33,6 +49,26 @@ ytd-watch-next-secondary-results-renderer,
    connective surfaces — feed posts, messaging, jobs, notifications, a person's
    profile — are untouched. Best-effort selector; fails safe (hides nothing) if
    LinkedIn renames the class. */
-aside.scaffold-layout__aside {
+html.amdion-reshape aside.scaffold-layout__aside {
+  display: none !important;
+}
+
+/* LinkedIn — mute the red unread-count bubbles in the global nav (messaging,
+   notifications, "My Network"). The re-energizing "you have N waiting" pull;
+   the destinations themselves stay one click away. `.notification-badge` is a
+   long-stable LinkedIn class; fail-safe if renamed. */
+html.amdion-reshape .notification-badge {
+  display: none !important;
+}
+
+/* Instagram — demote the Explore and Reels entry points (the involuntary
+   feed-of-feeds and the autoplaying short-form trap). Anchored on the route
+   hrefs, which are durable on IG; DMs (/direct), home, and a person's profile
+   are untouched. Reels is a motion problem opacity can't tame, so this hides the
+   entry point rather than dimming it (REORIENTATION §6). Scoped to the instagram
+   site class so an identically-named anchor elsewhere (e.g. X's /explore tab) is
+   never touched. */
+html.amdion-reshape.amdion-site-instagram a[href="/explore/"],
+html.amdion-reshape.amdion-site-instagram a[href^="/reels/"] {
   display: none !important;
 }

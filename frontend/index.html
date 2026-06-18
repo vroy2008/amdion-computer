@@ -153,6 +153,15 @@
     .toggle.on { background: var(--accent); }
     .toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
     .toggle.on::after { transform: translateX(18px); }
+    /* Per-site reshape list: compact, nested under the master toggle. */
+    .reshape-sites { display: flex; flex-direction: column; gap: 9px; margin: 2px 0 4px; padding-left: 2px; }
+    .reshape-sites.disabled { opacity: 0.4; pointer-events: none; }
+    .reshape-site { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .reshape-site .name { font-size: 12.5px; }
+    .reshape-site.off .name { color: var(--muted); }
+    .toggle.sm { width: 34px; height: 20px; border-radius: 10px; }
+    .toggle.sm::after { width: 14px; height: 14px; }
+    .toggle.sm.on::after { transform: translateX(14px); }
 
     .tweak { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
     .tweak:first-child { border-top: none; }
@@ -360,9 +369,31 @@
           <div><div class="label-main">Lock distractions while reading</div><div class="label-sub">Blocks your distraction sites in Chrome until you leave the reader, then restores your friction setting.</div></div>
           <button class="toggle" id="toggle-readlock"></button>
         </div>
+        <div class="row">
+          <div><div class="label-main">Offer Present on long pages</div><div class="label-sub">On a long page the reader can&rsquo;t reformat, a one-tap offer to go fullscreen with distractions locked. Off by default.</div></div>
+          <button class="toggle" id="toggle-present-offer"></button>
+        </div>
       </div>
 
-      <!-- 4 · Your Mac — exactly three high-impact, reversible tweaks. -->
+      <!-- 4 · Reshape — calm the trap on distraction sites, independent of friction. -->
+      <div class="section">
+        <h3>Reshape</h3>
+        <div class="row">
+          <div><div class="label-main">Calm distraction sites</div><div class="label-sub">Quiet feeds, rails, and badges &mdash; and a gentle nudge when you drift. Works even with friction <b>Off</b>.</div></div>
+          <button class="toggle" id="toggle-reshape"></button>
+        </div>
+        <div id="reshape-sites" class="reshape-sites"></div>
+        <div class="row" style="margin-top:14px;">
+          <div><div class="label-main">Fade the feed past the fold</div><div class="label-sub">Dim the bottomless scroll on X &amp; LinkedIn after the first screenful; click to bring one back. Experiment.</div></div>
+          <button class="toggle" id="toggle-feedfade"></button>
+        </div>
+        <div class="row">
+          <div><div class="label-main">Hide the YouTube home grid</div><div class="label-sub">Keep search and Subscriptions; hide only the algorithmic home wall.</div></div>
+          <button class="toggle" id="toggle-ythome"></button>
+        </div>
+      </div>
+
+      <!-- 5 · Your Mac — exactly three high-impact, reversible tweaks. -->
       <div class="section">
         <h3>Your Mac</h3>
         <div class="muted" style="font-size:12px; margin-bottom:12px;">Three reversible tweaks for a quieter desktop.</div>
@@ -864,6 +895,39 @@
     function setSeg(segEl, value) {
       segEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === value));
     }
+    // Reshape: the curated set of sites the per-site toggles cover. Default-on;
+    // the saved config carries an opt-OUT list (disabledSites), so a site absent
+    // from it is reshaped. x.com canonically covers twitter.com (one toggle).
+    const RESHAPE_SITES = [
+      { d: 'youtube.com', label: 'YouTube' },
+      { d: 'x.com', label: 'X / Twitter' },
+      { d: 'linkedin.com', label: 'LinkedIn' },
+      { d: 'instagram.com', label: 'Instagram' },
+      { d: 'reddit.com', label: 'Reddit' },
+      { d: 'facebook.com', label: 'Facebook' },
+      { d: 'tiktok.com', label: 'TikTok' },
+    ];
+    function renderReshapeSites(disabled) {
+      const off = new Set(disabled || []);
+      const wrap = $('reshape-sites');
+      wrap.innerHTML = '';
+      RESHAPE_SITES.forEach(s => {
+        const on = !off.has(s.d);
+        const row = document.createElement('div');
+        row.className = 'reshape-site' + (on ? '' : ' off');
+        row.innerHTML = `<div class="name">${s.label}</div><button class="toggle sm site-toggle${on ? ' on' : ''}" data-domain="${s.d}"></button>`;
+        row.querySelector('.site-toggle').onclick = (e) => {
+          const b = e.currentTarget;
+          b.classList.toggle('on');
+          row.classList.toggle('off', !b.classList.contains('on'));
+        };
+        wrap.appendChild(row);
+      });
+    }
+    // Dim the per-site list when the master reshape switch is off.
+    function syncReshapeEnabled() {
+      $('reshape-sites').classList.toggle('disabled', !$('toggle-reshape').classList.contains('on'));
+    }
     function loadSettingsForm() {
       setSeg($('seg-friction'), config.frictionLevel);
       $('toggle-greeting').classList.toggle('on', config.greetingEnabled);
@@ -876,8 +940,15 @@
       setSeg($('seg-read-theme'), (config.reading && config.reading.theme) || 'sepia');
       $('toggle-pill').classList.toggle('on', !(config.reading && config.reading.pillEnabled === false));
       $('toggle-readlock').classList.toggle('on', !(config.reading && config.reading.lockTabs === false));
+      $('toggle-present-offer').classList.toggle('on', !!(config.reading && config.reading.presentOffer));
       $('inp-focus-start').value = (config.reading && config.reading.focusShortcutStart) || '';
       $('inp-focus-end').value = (config.reading && config.reading.focusShortcutEnd) || '';
+      const rs = config.reshape || {};
+      $('toggle-reshape').classList.toggle('on', rs.enabled !== false);
+      renderReshapeSites(rs.disabledSites || []);
+      $('toggle-feedfade').classList.toggle('on', !!rs.feedFade);
+      $('toggle-ythome').classList.toggle('on', !!rs.hideYoutubeHome);
+      syncReshapeEnabled();
       $('summon-shortcut-hint').textContent = SUMMON_HINT;
       updateSummonLabels();
       $('update-status').textContent = '';
@@ -904,8 +975,16 @@
           theme: $('seg-read-theme').querySelector('.active')?.dataset.v || 'sepia',
           pillEnabled: $('toggle-pill').classList.contains('on'),
           lockTabs: $('toggle-readlock').classList.contains('on'),
+          presentOffer: $('toggle-present-offer').classList.contains('on'),
           focusShortcutStart: $('inp-focus-start').value.trim(),
           focusShortcutEnd: $('inp-focus-end').value.trim(),
+        },
+        reshape: {
+          enabled: $('toggle-reshape').classList.contains('on'),
+          disabledSites: [...$('reshape-sites').querySelectorAll('.site-toggle')]
+            .filter(b => !b.classList.contains('on')).map(b => b.dataset.domain),
+          feedFade: $('toggle-feedfade').classList.contains('on'),
+          hideYoutubeHome: $('toggle-ythome').classList.contains('on'),
         },
       });
       $('settings').classList.add('hidden');
@@ -1107,6 +1186,10 @@
       $('toggle-autostart').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-pill').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-readlock').onclick = (e) => e.target.classList.toggle('on');
+      $('toggle-present-offer').onclick = (e) => e.target.classList.toggle('on');
+      $('toggle-reshape').onclick = (e) => { e.target.classList.toggle('on'); syncReshapeEnabled(); };
+      $('toggle-feedfade').onclick = (e) => e.target.classList.toggle('on');
+      $('toggle-ythome').onclick = (e) => e.target.classList.toggle('on');
       $('rerun-onboarding').onclick = () => { $('settings').classList.add('hidden'); startOnboarding(); };
       $('btn-check-updates').onclick = checkForUpdates;
       $('btn-summon-shortcut').onclick = startSummonCapture;
