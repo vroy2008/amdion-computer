@@ -9,6 +9,9 @@ if (window.__TAURI__) {
     // ── Front-door state ──
     getState: () => invoke('get_state'),
     onStateUpdate: (cb) => listen('state-update', (e) => cb(e.payload)),
+    // Fires each time the panel is summoned; payload { newSession } says whether
+    // this arrival begins a new session (the door) vs. a re-summon mid-session.
+    onPanelSummoned: (cb) => listen('panel-summoned', (e) => cb(e.payload)),
     setIntent: (intent) => invoke('set_intent', { intent }),
     hidePanel: () => invoke('hide_panel'),
     expandForOnboarding: () => invoke('expand_for_onboarding'),

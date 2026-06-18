@@ -51,6 +51,30 @@ pub fn retreat_window(win: &tauri::WebviewWindow) {
     let _ = win.hide();
 }
 
+/// Called when the panel is summoned (tray click / ⌃⇧A / tray menu). Decides
+/// whether this arrival begins a NEW session — reusing the classifier's own
+/// session boundary (an idle gap ≥ `sessionGap`, a hard lock, or the first
+/// arrival of the day) — and if so logs a single `session_start` event, so the
+/// record carries a real "I sat down" timestamp. Emits `panel-summoned
+/// { newSession }` either way: the front door greets on a genuine arrival and
+/// stays quiet on a re-summon mid-session.
+///
+/// Permissionless and quiet: the boundary is derived from the sensing already
+/// running and the summon is an arrival the user makes themselves — no popup, no
+/// notification, no new permission (see docs/REORIENTATION.md §2).
+pub fn on_panel_summoned(app: &tauri::AppHandle) {
+    let Some(db) = app.try_state::<crate::db::Db>() else {
+        return;
+    };
+    let now = chrono::Utc::now().timestamp_millis();
+    let session_start = crate::commands::observer::current_session_start(db.inner()).unwrap_or(now);
+    let new_session = !db.has_event_since("session_start", session_start);
+    if new_session {
+        db.insert_event("session_start", "app", None, None, None);
+    }
+    let _ = app.emit("panel-summoned", serde_json::json!({ "newSession": new_session }));
+}
+
 /// Record (or clear, with `None`) the user's stated intent for this session.
 #[tauri::command]
 pub fn set_intent(
@@ -58,9 +82,19 @@ pub fn set_intent(
     state: tauri::State<'_, AppState>,
     intent: Option<String>,
 ) -> Result<AppStateData, String> {
+    let cleaned = intent.filter(|i| !i.trim().is_empty());
     {
         let mut s = state.data.lock().unwrap();
-        s.intent = intent.filter(|i| !i.trim().is_empty());
+        s.intent = cleaned.clone();
+    }
+    // Log a real, jotted intent to the on-device record — the longitudinal "what
+    // I set out to do" trail for Reflect and the future agent. Clearing the
+    // intent (`None`) isn't an event; only a set one is.
+    if let Some(text) = cleaned.as_deref() {
+        if let Some(db) = app.try_state::<crate::db::Db>() {
+            let meta = serde_json::json!({ "intent": text }).to_string();
+            db.insert_event("session_intent", "app", None, None, Some(&meta));
+        }
     }
     Ok(emit_state(&app, &state))
 }

@@ -61,7 +61,13 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["*://*.youtube.com/*", "*://*.x.com/*", "*://*.twitter.com/*"],
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.x.com/*",
+        "*://*.twitter.com/*",
+        "*://*.linkedin.com/*",
+        "*://*.instagram.com/*"
+      ],
       "css": ["content/declutter.css"],
       "run_at": "document_start"
     }

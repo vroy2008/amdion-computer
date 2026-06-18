@@ -277,6 +277,7 @@
     <div id="intent-prompt" class="intent-row hidden">
       <input type="text" id="intent-input" placeholder="What has your attention?">
       <button class="btn primary" id="intent-save">Set</button>
+      <button class="btn ghost" id="intent-skip" title="Not now — just here">Skip</button>
     </div>
 
     <div id="intent-display" class="intent-active hidden">
@@ -543,6 +544,10 @@
     // Local calendar day the anchor above was captured for, so the home counter
     // rolls over at midnight even when the panel is left open across it.
     let anchorDay = null;
+    // Set true when the user skips the intent invite, so a re-summon within the
+    // SAME session doesn't re-nag. Reset to false on a genuine new session (the
+    // door) — see onSummon.
+    let intentDismissedThisSession = false;
 
     const $ = (id) => document.getElementById(id);
 
@@ -592,13 +597,29 @@
       g.textContent = greetingForHour();
       g.classList.remove('error');
       $('intent-display').classList.toggle('hidden', !has);
-      $('intent-prompt').classList.toggle('hidden', has || !greetingOn);
+      $('intent-prompt').classList.toggle('hidden', has || !greetingOn || intentDismissedThisSession);
       if (has) $('intent-text').textContent = state.intent;
       $('read-row').classList.toggle('hidden', !(state && state.extensionConnected));
     }
     async function setIntent(value) {
       state = await api.setIntent(value || null);
       $('intent-input').value = '';
+      renderHome();
+    }
+
+    // The panel was summoned (tray / ⌃⇧A / menu). On a genuine NEW session — the
+    // door — re-open the intent invite (a fresh arrival) and refresh today's
+    // figure; the prior session's intent is per-session, so clear it (it's
+    // already in the on-device record). On a re-summon mid-session, just
+    // re-render — never re-nag.
+    async function onSummon(isNewSession) {
+      if (isNewSession) {
+        intentDismissedThisSession = false;
+        if (state && state.intent) {
+          try { state = await api.setIntent(null); } catch (_) {}
+        }
+        anchorComputerSince();
+      }
       renderHome();
     }
 
@@ -778,9 +799,9 @@
       notes.forEach(n => {
         const day = dayLabel(n.ts);
         if (day !== lastDay) { html += `<div class="note-day">${day}</div>`; lastDay = day; }
-        const kind = n.kind === 'highlight' ? 'Highlight' : n.kind === 'screenshot' ? 'Screenshot' : 'Note';
+        const kind = n.kind === 'highlight' ? 'Highlight' : n.kind === 'screenshot' ? 'Screenshot' : n.kind === 'link' ? 'Parked' : 'Note';
         const bodyHtml = n.body ? `<div class="note-body">${esc(n.body)}</div>`
-          : (n.hasImage ? '' : '<div class="note-body empty">No text</div>');
+          : (n.hasImage || n.kind === 'link' ? '' : '<div class="note-body empty">No text</div>');
         const host = srcHost(n.sourceUrl);
         const srcLabel = n.sourceTitle ? esc(n.sourceTitle) : (host ? esc(host) : '');
         const thumb = n.hasImage ? `<img class="note-thumb" data-img="${n.id}" alt="screenshot">` : '';
@@ -1078,6 +1099,7 @@
       $('intent-save').onclick = () => setIntent($('intent-input').value.trim());
       $('intent-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') setIntent(e.target.value.trim()); });
       $('intent-clear').onclick = () => setIntent(null);
+      $('intent-skip').onclick = () => { intentDismissedThisSession = true; $('intent-input').value = ''; renderHome(); };
 
       $('settings-close').onclick = () => $('settings').classList.add('hidden');
       $('settings-save').onclick = saveSettings;
@@ -1146,6 +1168,8 @@
         renderExtStatus();
 
         api.onStateUpdate((s) => { state = s; renderHome(); renderExtStatus(); });
+        // The door: re-greet / re-invite intent on a genuine new session.
+        if (api.onPanelSummoned) api.onPanelSummoned((p) => onSummon(!!(p && p.newSession)));
         // Live activity signal from the sensing engine — refreshes the Observer's
         // status line (and its stats, if it's open) when state changes.
         api.onSensingUpdate((s) => {

@@ -125,6 +125,24 @@ impl Db {
         }
     }
 
+    /// True if any event of `kind` has been logged at or after `since_ts`. The
+    /// front door uses this to tell a fresh session arrival (no `session_start`
+    /// yet within the current session) from a re-summon (already greeted), so it
+    /// logs and greets exactly once per session.
+    pub fn has_event_since(&self, kind: &str, since_ts: i64) -> bool {
+        match self.0.lock() {
+            Ok(conn) => conn
+                .query_row(
+                    "SELECT COUNT(*) FROM events WHERE kind = ?1 AND ts >= ?2",
+                    rusqlite::params![kind, since_ts],
+                    |r| r.get::<_, i64>(0),
+                )
+                .map(|n| n > 0)
+                .unwrap_or(false),
+            Err(_) => false,
+        }
+    }
+
     // ── Notes (Amdion Notes — the Attention layer's capture store) ───────────
 
     /// Insert one captured note, stamped now. `image_path` is the relative path

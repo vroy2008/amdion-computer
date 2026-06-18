@@ -110,6 +110,21 @@ fn build_timeline(events: &[Event], now: i64) -> classify::Timeline {
     )
 }
 
+/// Start timestamp of the session the user is in right now (the most-recent
+/// session of the local day), or `None` if nothing has been sensed yet. Reuses
+/// the same classifier boundary the Observer uses — an idle gap ≥ `sessionGap`
+/// or a hard lock starts a new session — so "a new session" means exactly the
+/// same thing at the front door as it does everywhere else. Consumed by
+/// `session::on_panel_summoned`.
+pub(crate) fn current_session_start(db: &Db) -> Option<i64> {
+    let (_date, start, end) = day_bounds(&None);
+    let events = load_events(db, start, end);
+    build_timeline(&events, now_clamped(end))
+        .sessions
+        .last()
+        .map(|s| s.start_ts)
+}
+
 /// The session/block/break timeline for a day. The trailing block carries
 /// `open: true` so the UI can render it as live.
 #[tauri::command]

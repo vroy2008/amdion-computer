@@ -73,6 +73,8 @@ fn summon_panel(app: &tauri::AppHandle) {
             let _ = win.set_focus();
         }
     }
+    // The summon IS the arrival: log a new session + let the front door greet.
+    commands::session::on_panel_summoned(app);
 }
 
 /// Does `m`'s logical frame contain the point `(px, py)`? A monitor's logical
@@ -373,6 +375,7 @@ pub fn run() {
                         if let Some(w) = app.get_webview_window("main") {
                             let _ = w.show();
                             let _ = w.set_focus();
+                            commands::session::on_panel_summoned(app);
                         }
                     }
                     "quit" => app.exit(0),
@@ -406,6 +409,7 @@ pub fn run() {
                             let scale = win.scale_factor().unwrap_or(1.0);
                             let (x, y) = anchor_from_rect(&rect, scale);
                             show_panel_under(&win, x, y);
+                            commands::session::on_panel_summoned(app);
                         }
                     }
                 })

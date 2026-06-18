@@ -10,9 +10,29 @@ ytd-mini-guide-entry-renderer[aria-label="Shorts"] {
   display: none !important;
 }
 
+/* YouTube — strip the watch-page "Up next" / related rail and the end-screen
+   cards, the autoplay rabbit-hole. The video, description, channel, search, and
+   Subscriptions are untouched; a playlist panel (a separate element) survives.
+   NOTE: CSS hides the rail but can't stop player autoplay-at-source (a separate
+   scripted change — see REORIENTATION §6). */
+ytd-watch-next-secondary-results-renderer,
+.ytp-ce-element,
+.ytp-endscreen-content {
+  display: none !important;
+}
+
 /* X / Twitter — hide the "Trending"/"What's happening" and "Who to follow"
    modules in the right column, keeping the search box. */
 [data-testid="sidebarColumn"] [aria-label="Timeline: Trending now"],
 [data-testid="sidebarColumn"] [aria-label="Who to follow"] {
+  display: none !important;
+}
+
+/* LinkedIn — mute the promotional right rail: LinkedIn News, "Add to your feed"
+   (follow-bait), "People also viewed"-style comparison modules, and ads. The
+   connective surfaces — feed posts, messaging, jobs, notifications, a person's
+   profile — are untouched. Best-effort selector; fails safe (hides nothing) if
+   LinkedIn renames the class. */
+aside.scaffold-layout__aside {
   display: none !important;
 }
