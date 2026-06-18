@@ -178,6 +178,14 @@
     #onboarding .ob-step[data-step="3"] { text-align: center; }
     .ob-welcome { line-height: 1.7; font-size: 15px; color: #d6d6d6; }
     .ob-welcome b { color: var(--fg); font-weight: 500; }
+    /* Welcome step (0): a logo hero — the hourglass mark + wordmark, calm & sparse. */
+    .ob-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 16px 0 4px; }
+    .ob-hourglass { display: block; }
+    .ob-wordmark { font-family: 'Cinzel', serif; font-size: 14px; letter-spacing: 0.34em; color: #ededed; margin-top: 24px; padding-left: 0.34em; }
+    .ob-headline { font-family: 'Inter', sans-serif; font-size: 23px; font-weight: 300; line-height: 1.3; color: var(--fg); margin: 20px 0 0; }
+    .ob-sub { font-size: 13.5px; line-height: 1.65; color: #9aa0a6; max-width: 330px; margin: 16px 0 0; }
+    .ob-hint { font-size: 11px; color: var(--muted); margin-top: 30px; }
+    .ob-hint .summon-kbd { color: #dcdcdc; font-weight: 400; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 5px; padding: 2px 7px; margin-right: 5px; }
     /* Connect-Chrome step: a status card + numbered badge steps, to match the
        weight of the Welcome prose and the Tune-your-Mac cards. */
     .ob-connect-status { display: flex; align-items: center; gap: 10px; margin: 18px 0; padding: 11px 14px;
@@ -286,12 +294,6 @@
         <div class="text" id="intent-text"></div>
       </div>
       <button class="btn ghost small" id="intent-clear">Clear</button>
-    </div>
-
-    <div id="read-row" class="attn-row hidden">
-      <button class="btn ghost small" id="btn-read">Read this tab calmly</button>
-      <button class="btn ghost small" id="btn-present" title="Fullscreen + lock distractions on this tab">Focus this tab</button>
-      <button class="btn ghost small" id="btn-capture" title="Screenshot this tab to Amdion Notes (⌃⇧C)">Capture this tab</button>
     </div>
 
     <div class="home-hint">Summon Amdion any time with <span class="summon-kbd">⌃⇧A</span> — Control + Shift + A.</div>
@@ -476,14 +478,25 @@
     <div class="sheet-body">
       <!-- Step 0: welcome -->
       <div class="ob-step" data-step="0">
-        <p class="ob-welcome">
-          Amdion is a calm <b>attention layer</b> that lives in your menu bar.
-          State what you're here to do, and it keeps distractions at arm's length —
-          then gets out of your way. Everything stays local on your device.
-        </p>
-        <p class="ob-welcome" style="margin-top:14px;">
-          Summon it any time with <b class="summon-kbd">⌃⇧A</b> or the menu-bar icon.
-        </p>
+        <div class="ob-hero">
+          <svg class="ob-hourglass" width="84" height="84" viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <linearGradient id="ob-hg" gradientUnits="userSpaceOnUse" x1="60" y1="20" x2="60" y2="100">
+                <stop offset="0" stop-color="#8ad9f0"/>
+                <stop offset="0.5" stop-color="#2480ba"/>
+                <stop offset="1" stop-color="#123a57"/>
+              </linearGradient>
+            </defs>
+            <rect x="31" y="20" width="58" height="5" rx="2.5" fill="#3a93c4"/>
+            <polygon points="34,25 86,25 60,60" fill="url(#ob-hg)"/>
+            <polygon points="34,95 86,95 60,60" fill="url(#ob-hg)"/>
+            <rect x="31" y="95" width="58" height="5" rx="2.5" fill="#163f5d"/>
+          </svg>
+          <div class="ob-wordmark">AMDION</div>
+          <h2 class="ob-headline">A calm layer for<br>your attention.</h2>
+          <p class="ob-sub">Say what you're here to do. Amdion holds distractions at arm's length, then steps aside — all on your device.</p>
+          <div class="ob-hint"><span class="summon-kbd">⌃⇧A</span> summons it anytime</div>
+        </div>
       </div>
 
       <!-- Step 1: optional Mac tuning -->
@@ -599,7 +612,6 @@
       $('intent-display').classList.toggle('hidden', !has);
       $('intent-prompt').classList.toggle('hidden', has || !greetingOn || intentDismissedThisSession);
       if (has) $('intent-text').textContent = state.intent;
-      $('read-row').classList.toggle('hidden', !(state && state.extensionConnected));
     }
     async function setIntent(value) {
       state = await api.setIntent(value || null);
@@ -613,6 +625,9 @@
     // already in the on-device record). On a re-summon mid-session, just
     // re-render — never re-nag.
     async function onSummon(isNewSession) {
+      // Setup not finished (e.g. dismissed with Esc): a summon resumes the
+      // centered onboarding rather than dropping the user on Home.
+      if (config && !config.onboardingComplete) { startOnboarding(); return; }
       if (isNewSession) {
         intentDismissedThisSession = false;
         if (state && state.intent) {
@@ -843,23 +858,6 @@
     async function openNotes() {
       $('notes').classList.remove('hidden');
       await loadNotes($('notes-search').value);
-    }
-
-    // ── Attention actions on the active tab (Present / Capture) ──
-    let presentOn = false;
-    async function togglePresent() {
-      presentOn = !presentOn;
-      try { await api.presentTab(presentOn); } catch (_) {}
-      const b = $('btn-present');
-      b.textContent = presentOn ? 'Exit focus' : 'Focus this tab';
-      b.classList.toggle('primary', presentOn);
-      if (presentOn && api.hidePanel) api.hidePanel();
-    }
-    async function captureThisTab() {
-      try { await api.captureTab(); } catch (_) {}
-      const b = $('btn-capture'), label = b.textContent;
-      b.textContent = 'Captured ✓';
-      setTimeout(() => { b.textContent = label; }, 1100);
     }
 
     // ── Settings ──
@@ -1109,9 +1107,6 @@
       $('toggle-autostart').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-pill').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-readlock').onclick = (e) => e.target.classList.toggle('on');
-      $('btn-read').onclick = async () => { try { await api.enterReadMode(); } catch (_) {} if (api && api.hidePanel) api.hidePanel(); };
-      $('btn-present').onclick = togglePresent;
-      $('btn-capture').onclick = captureThisTab;
       $('rerun-onboarding').onclick = () => { $('settings').classList.add('hidden'); startOnboarding(); };
       $('btn-check-updates').onclick = checkForUpdates;
       $('btn-summon-shortcut').onclick = startSummonCapture;

@@ -22,6 +22,11 @@ const ONBOARD_H: f64 = 640.0;
 /// Grow the window to the centered onboarding card and show it — prominent the
 /// first time, before it retreats into the menu bar on finish.
 pub fn expand_window(win: &tauri::WebviewWindow) {
+    // The window ships non-resizable (a fixed menu-bar panel). A non-resizable
+    // window can clamp a programmatic grow, so lift the flag for the centered
+    // onboarding card and restore it on retreat. No resize grips show either way
+    // — the window is borderless (decorations: false).
+    let _ = win.set_resizable(true);
     let _ = win.set_size(LogicalSize::new(ONBOARD_W, ONBOARD_H));
     let _ = win.center();
     let _ = win.show();
@@ -32,6 +37,7 @@ pub fn expand_window(win: &tauri::WebviewWindow) {
 /// menu bar, and hide it — the "retreat into the menu bar" landing.
 pub fn retreat_window(win: &tauri::WebviewWindow) {
     let _ = win.set_size(LogicalSize::new(PANEL_W, PANEL_H));
+    let _ = win.set_resizable(false);
     if let Some(m) = win
         .current_monitor()
         .ok()

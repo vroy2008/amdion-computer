@@ -49,9 +49,23 @@ launchctl bootout "gui/$(id -u)/AMDION" 2>/dev/null; rm -f ~/Library/LaunchAgent
 Fixes:
 
 ```bash
-npm run dev:clean    # kill any running Amdion instance (also run automatically by `npm run dev`)
-npm run dev:reset    # move app-data aside for a 100% fresh start (timestamped backup, nothing deleted)
+npm run dev:clean       # kill any running Amdion instance (also run automatically by `npm run dev`)
+npm run dev:reset       # move app-data aside for a fresh start (Application Support only, in-place backup)
+npm run dev:reset:hard  # full "first-launch" reset — see below
 ```
+
+### `dev:reset` vs `dev:reset:hard`
+
+`dev:reset` only moves `~/Library/Application Support/com.amdion.desktop` aside. But a
+macOS **reinstall** leaves more behind — **`~/Library/Caches/...` and the WKWebView
+store `~/Library/WebKit/...` survive too**, plus the launch-at-login agent and the
+installed app. That leftover state is why a reinstall can still show *old stuff*.
+
+`dev:reset:hard` clears the **complete** per-user surface for `com.amdion.desktop`
+(Application Support + Caches + WebKit + the LaunchAgent + `/Applications/AMDION.app`),
+moving everything to `~/.Trash` (timestamped, recoverable — nothing is deleted). It
+**keeps `~/.amdion`** (the updater signing key — irreplaceable). Use it when you want a
+genuine first-launch state, or before a clean reinstall.
 
 Check for zombies / which port is live:
 

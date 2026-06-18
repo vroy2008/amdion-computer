@@ -7,7 +7,8 @@
     "dev": "sh scripts/dev-clean.sh && tauri dev",
     "build": "tauri build",
     "dev:clean": "sh scripts/dev-clean.sh",
-    "dev:reset": "sh scripts/reset-data.sh"
+    "dev:reset": "sh scripts/reset-data.sh",
+    "dev:reset:hard": "sh scripts/reset-hard.sh"
   },
   "author": "AMDION",
   "license": "MIT",
