@@ -6,8 +6,16 @@
 // so a `chrome.alarms` heartbeat wakes us to reconnect and to keep a live socket
 // warm (an open socket alone does NOT keep an MV3 worker alive).
 
-// The app binds the first free port in this range; we scan the same range.
-const PORTS = Array.from({ length: 11 }, (_, i) => 17872 + i);
+// The app binds the first free port in ITS range; we scan dev ports FIRST so a
+// running `tauri dev` instance always wins over the installed release app on the
+// same machine (they use SEPARATE ranges — see src-tauri/src/bridge_ws.rs). With
+// only release up, the cursor walks past the dead dev ports and lands on release
+// (normal end-user behavior). DEV_PORTS/REL_PORTS must stay in sync with the
+// debug_assertions split in bridge_ws.rs.
+const DEV_PORTS = Array.from({ length: 11 }, (_, i) => 17883 + i); // dev:     17883–17893
+const REL_PORTS = Array.from({ length: 11 }, (_, i) => 17872 + i); // release: 17872–17882
+const PORTS = [...DEV_PORTS, ...REL_PORTS];
+const DEV_PORT_SET = new Set(DEV_PORTS);
 
 // Built-in distraction set. Soft nudges and Lock-In act on this ∪ the user's
 // block list (pushed by the app). Editable additions live in Amdion's settings.
@@ -25,6 +33,8 @@ let ws = null;
 let portIdx = 0;
 let connected = false;
 let reconnectTimer = null;
+let connectedPort = null; // the port the live socket is on (tells dev vs release range)
+let migrateProbe = null;  // throwaway socket used to detect a dev instance to migrate to
 
 // ── WebSocket lifecycle ───────────────────────────────────────────────────
 
@@ -39,13 +49,15 @@ function connect() {
   }
   ws.onopen = () => {
     connected = true;
+    connectedPort = port;
     send({ type: 'hello', payload: { extVersion: EXT_VERSION, browser: 'chrome' } });
   };
   ws.onmessage = (ev) => handleMessage(ev.data);
   ws.onclose = () => {
     connected = false;
+    connectedPort = null;
     ws = null;
-    portIdx++; // try the next port in the range on the next attempt
+    portIdx++; // try the next port in the (dev-first) range on the next attempt
     scheduleReconnect();
   };
   ws.onerror = () => { try { ws.close(); } catch (_) {} };
@@ -54,6 +66,39 @@ function connect() {
 function scheduleReconnect() {
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 1500);
+}
+
+// While connected to a RELEASE port, periodically check whether a dev instance
+// has since come up; if so, migrate to it — so `release running → run tauri dev`
+// switches the extension to the new build with no manual reload. Non-destructive:
+// we only tear down the live release socket once a dev port actually accepts a
+// connection, never on a failed probe. Bounded: at most one in-flight probe,
+// ≤11 dev ports, once per keepalive tick, and an instant no-op once on dev.
+function maybeMigrateToDev() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;                  // only from a live socket
+  if (connectedPort == null || DEV_PORT_SET.has(connectedPort)) return; // already on dev
+  if (migrateProbe) return;                                             // a probe is already in flight
+
+  let idx = 0;
+  const tryNext = () => {
+    if (idx >= DEV_PORTS.length) { migrateProbe = null; return; }
+    const port = DEV_PORTS[idx++];
+    let probe;
+    try { probe = new WebSocket(`ws://127.0.0.1:${port}`); }
+    catch (_) { tryNext(); return; }
+    migrateProbe = probe;
+    probe.onopen = () => {
+      // A dev instance is up. Drop the probe and the release socket; the cursor,
+      // reset to the top of the (dev-first) range, reconnects us to dev.
+      try { probe.close(); } catch (_) {}
+      migrateProbe = null;
+      portIdx = 0;
+      try { if (ws) ws.close(); } catch (_) {} // onclose schedules the reconnect
+    };
+    probe.onerror = () => { try { probe.close(); } catch (_) {} };
+    probe.onclose = () => { if (migrateProbe === probe) { migrateProbe = null; tryNext(); } };
+  };
+  tryNext();
 }
 
 function send(obj) {
@@ -290,8 +335,12 @@ chrome.idle.onStateChanged.addListener((state) => send({ type: 'idle_state', pay
 chrome.alarms.create(KEEPALIVE, { periodInMinutes: 0.4 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name !== KEEPALIVE) return;
-  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) connect();
-  else if (ws.readyState === WebSocket.OPEN) send({ type: 'ping' });
+  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+    connect();
+  } else if (ws.readyState === WebSocket.OPEN) {
+    send({ type: 'ping' });
+    maybeMigrateToDev(); // cheap dev re-probe while parked on a release port
+  }
 });
 
 chrome.runtime.onStartup.addListener(() => {

@@ -1,31 +1,29 @@
 #!/bin/sh
-# Amdion dev pre-flight — kill any running Amdion instance so the fresh dev build
-# owns bridge port 17872 and the Chrome extension can't latch onto a zombie app.
+# Amdion dev pre-flight — kill any prior *dev* instance so the fresh `tauri dev`
+# build owns its bridge port (dev range 17883-17893) cleanly.
 #
-# Why this exists: the app binds the FIRST free port in 17872-17882 and the
-# extension connects to the FIRST one it finds (see bridge_ws.rs / background.js).
-# A leftover instance — a previous `tauri dev`, or the installed
-# /Applications/AMDION.app, which shares the same identifier — steals the port,
-# so the extension ends up talking to old code while your new build sits idle.
-# Killing stale instances first makes "edit -> npm run dev" deterministic.
-# No-op when nothing is running. Always exits 0 so it can chain into `tauri dev`.
+# Dev and release are now fully isolated: dev builds use a separate port range
+# AND a separate app-data dir (`com.amdion.desktop.dev`) via a debug_assertions
+# split (see bridge_ws.rs / config.rs), and the Chrome extension PREFERS the dev
+# range (extension/background.js). So we deliberately leave the installed
+# /Applications/AMDION.app running — dev and release coexist, and the extension
+# talks to the dev build regardless. We only clear a *previous* `tauri dev`, since
+# two dev instances would still collide on the dev range.
+#
+# IMPORTANT: both the dev binary and the installed app's executable are named
+# `amdion-computer` (the bundle is AMDION.app, but its Mach-O is amdion-computer),
+# so we match the dev instance by its PATH (`target/debug/...`), NOT by process
+# name — a `pkill -x amdion-computer` would also kill the installed release app.
+# No-op when no dev instance is running; always exits 0 so it can chain into
+# `tauri dev`.
 
-# AMDION         = the bundled / installed app binary (productName)
-# amdion-computer = the dev binary tauri dev runs from target/debug
-killed=0
-for name in AMDION amdion-computer; do
-  if pgrep -x "$name" >/dev/null 2>&1; then
-    pkill -x "$name" >/dev/null 2>&1 || true
-    killed=1
-  fi
-done
-
-if [ "$killed" = "1" ]; then
-  echo "[dev-clean] stopped a running Amdion instance"
-  # Give the OS a moment to release the bridge port before tauri dev rebinds it.
+if pgrep -f 'target/debug/amdion-computer' >/dev/null 2>&1; then
+  pkill -f 'target/debug/amdion-computer' >/dev/null 2>&1 || true
+  echo "[dev-clean] stopped a previous dev instance"
+  # Give the OS a moment to release the dev bridge port before tauri dev rebinds it.
   sleep 1
 else
-  echo "[dev-clean] no running Amdion instance"
+  echo "[dev-clean] no previous dev instance"
 fi
 
 exit 0

@@ -10,7 +10,7 @@
         it, or the panel renders blank under hardened runtime.
       - network client: reqwest calls (Gemini, the updater fetch).
       - network server: the loopback WebSocket bridge the Chrome extension
-        connects to (bridge_ws.rs, ports 17872-17882).
+        connects to (bridge_ws.rs; release ports 17872-17882, dev 17883-17893).
     No App Sandbox key — this is direct Developer ID distribution, not the Mac
     App Store, so the NSWorkspace / CoreGraphics / global-shortcut access the
     app relies on keeps working.

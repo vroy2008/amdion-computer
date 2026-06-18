@@ -165,11 +165,23 @@ impl Default for AppConfig {
     }
 }
 
-/// macOS bundle identifier — must match `tauri.conf.json`.
+/// macOS bundle identifier. Release matches `tauri.conf.json`; dev builds get a
+/// `.dev` suffix so `tauri dev` and the installed release app keep SEPARATE
+/// app-data dirs (config + onboarding state, db, notes, bridge.json, tuning) and
+/// never clobber each other — a fresh dev run then reliably shows onboarding,
+/// independent of release. Split by build profile via `debug_assertions`
+/// (`tauri dev` = debug, the `tauri build` release bundle = not), the same gate
+/// lib.rs uses for autostart/updater. (A `tauri build --debug` artifact would
+/// carry the `.dev` identity too — intended: a debug bundle is a dev artifact;
+/// the real /Applications release is always `tauri build`.)
+#[cfg(not(debug_assertions))]
 const APP_IDENTIFIER: &str = "com.amdion.desktop";
+#[cfg(debug_assertions)]
+const APP_IDENTIFIER: &str = "com.amdion.desktop.dev";
 
 /// Amdion's per-user data directory:
-/// `~/Library/Application Support/com.amdion.desktop`, created on first use.
+/// `~/Library/Application Support/<APP_IDENTIFIER>` (release `com.amdion.desktop`;
+/// dev `com.amdion.desktop.dev`), created on first use.
 ///
 /// Config and tuning snapshots live here, not next to the executable: once
 /// Amdion is installed in `/Applications` its bundle is read-only, so the old

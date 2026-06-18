@@ -1,17 +1,20 @@
 # Development loop
 
 You do **not** need to uninstall the app or remove + re-add the extension on every
-change. That cycle was masking a different problem (see *The stale-instance trap*).
+change. Dev and release are now fully isolated and run side by side.
 
 ## The app
 
 ```bash
-npm run dev          # auto-kills any stale Amdion, then runs `tauri dev`
+npm run dev          # stops any previous `tauri dev`, then runs `tauri dev`
 ```
 
 - **Rust edits** (`src-tauri/`) — `tauri dev` rebuilds and relaunches automatically.
 - **Frontend edits** (`frontend/`) — re-summon the panel (`⌃⇧A`) to pick them up.
 - You never quit/relaunch by hand; just keep `npm run dev` running.
+
+The installed `/Applications/AMDION.app` can stay running the whole time — `npm run
+dev` no longer kills it (see *Dev and release are isolated*, below).
 
 ## The extension
 
@@ -24,56 +27,76 @@ After editing anything under `extension/`:
 That's it. **Remove + Load unpacked is only needed if you change the manifest's
 identity or move the folder** — not for normal code changes.
 
-## When things act weird: the stale-instance trap
+## Dev and release are isolated (the old stale-instance trap, fixed)
 
-The app binds the **first free port** in `17872–17882`; the extension connects to
-the **first port it finds**. So a leftover instance — a previous `tauri dev`, or the
-installed `/Applications/AMDION.app` (same identifier, same port range, same
-app-data dir) — steals the port, and the extension talks to **old code** while your
-fresh build sits idle on the next port. Symptoms: captures/friction not working,
-`[bridge] extension connected` on a build you didn't expect, two menu-bar hourglasses.
+Dev (`tauri dev`) and release (`/Applications/AMDION.app`) used to share a bundle
+identifier, a bridge port range, and an app-data dir, so they fought over the port
+and the extension latched onto whichever instance won the race — often the stale
+one. Now they're split by build profile (`#[cfg(debug_assertions)]`: `tauri dev` is
+a debug build, the `tauri build` release bundle is not):
 
-**The worst offender was launch-at-login.** `config.autostart` defaults to on, so
-every launch re-registered the running binary as a LaunchAgent
-(`~/Library/LaunchAgents/AMDION.plist`) — including the installed
-`/Applications/AMDION.app`, which then auto-started at *every login* and grabbed the
-port before any dev run. **Dev builds no longer register autostart** (a
-`debug_assertions` gate in `src-tauri/src/lib.rs` actively clears any stale agent);
-only release builds honor the setting. If you ever see that plist again, a release
-build you launched created it — remove it with:
+| | Release (`/Applications/AMDION.app`) | Dev (`tauri dev`) |
+|---|---|---|
+| Bundle id / app-data dir | `com.amdion.desktop` | `com.amdion.desktop.dev` |
+| Bridge port range | 17872–17882 | 17883–17893 |
+
+The Chrome extension scans the **dev range first**, then release (`extension/
+background.js`), so a running `tauri dev` build always wins. If the extension is
+parked on the release app and you then start `tauri dev`, the keepalive re-probes
+the dev range and **migrates automatically** within a tick (~24s); an extension
+**Reload** is the instant path.
+
+Because dev has its own app-data, a fresh `tauri dev` build runs onboarding off its
+own `onboardingComplete` flag — independent of the installed app, so onboarding
+shows reliably. Two menu-bar hourglasses (release + dev) is now **expected and
+fine**, not a symptom.
+
+**Dev's AI key is separate too.** The release Settings key lives in the release
+app-data and does not carry into dev. For dev, put `GEMINI_API_KEY=…` in a repo
+`.env` (loaded by `dotenvy` at startup — see `config.rs`) or paste a key into dev's
+own onboarding/Settings.
+
+### The launch-at-login zombie (still worth knowing)
+
+`config.autostart` defaults on, so a **release** launch registers a LaunchAgent
+(`~/Library/LaunchAgents/AMDION.plist`) that relaunches the release app at every
+login. **Dev builds never register autostart** (a `debug_assertions` gate in
+`src-tauri/src/lib.rs` actively clears any stale agent). If you ever see that plist,
+a release build you launched created it; remove it with:
 
 ```bash
 launchctl bootout "gui/$(id -u)/AMDION" 2>/dev/null; rm -f ~/Library/LaunchAgents/AMDION.plist
 ```
 
-Fixes:
+## Fresh-start helpers
 
 ```bash
-npm run dev:clean       # kill any running Amdion instance (also run automatically by `npm run dev`)
-npm run dev:reset       # move app-data aside for a fresh start (Application Support only, in-place backup)
+npm run dev:clean       # stop a previous `tauri dev` (also run automatically by `npm run dev`)
+npm run dev:reset       # move the DEV app-data aside for a fresh first-run (in-place backup)
 npm run dev:reset:hard  # full "first-launch" reset — see below
 ```
 
 ### `dev:reset` vs `dev:reset:hard`
 
-`dev:reset` only moves `~/Library/Application Support/com.amdion.desktop` aside. But a
-macOS **reinstall** leaves more behind — **`~/Library/Caches/...` and the WKWebView
-store `~/Library/WebKit/...` survive too**, plus the launch-at-login agent and the
-installed app. That leftover state is why a reinstall can still show *old stuff*.
+`dev:reset` moves the **dev** dir (`~/Library/Application Support/com.amdion.desktop.dev`)
+aside — the quickest way to replay first-run onboarding on a dev build. It leaves
+the installed release app and its data untouched, so it's safe to run while release
+is up.
 
-`dev:reset:hard` clears the **complete** per-user surface for `com.amdion.desktop`
-(Application Support + Caches + WebKit + the LaunchAgent + `/Applications/AMDION.app`),
-moving everything to `~/.Trash` (timestamped, recoverable — nothing is deleted). It
-**keeps `~/.amdion`** (the updater signing key — irreplaceable). Use it when you want a
-genuine first-launch state, or before a clean reinstall.
+`dev:reset:hard` simulates a genuine clean reinstall: it clears the **complete**
+per-user surface (Application Support + Caches + WebKit + saved state) for **both**
+identifiers, plus the installed `/Applications/AMDION.app` and the release
+LaunchAgent — everything moved to `~/.Trash` (timestamped, recoverable, nothing
+deleted). It **keeps `~/.amdion`** (the updater signing key — irreplaceable). Use it
+for a true first-launch state, or before a clean reinstall.
 
-Check for zombies / which port is live:
+## Check which instance is live / which port
 
 ```bash
-pgrep -xl AMDION; pgrep -xl amdion-computer
-lsof -nP -iTCP -sTCP:LISTEN | grep 1787
-cat "$HOME/Library/Application Support/com.amdion.desktop/bridge.json"   # the port the live app advertises
+# Both the installed app and `tauri dev` run an executable named amdion-computer
+# (the bundle is AMDION.app, its Mach-O is amdion-computer) — tell them apart by PATH:
+pgrep -fl amdion-computer                              # /Applications/… = release, target/debug/… = dev
+lsof -nP -iTCP -sTCP:LISTEN | grep 1787                # 17872… = release, 17883… = dev
+cat "$HOME/Library/Application Support/com.amdion.desktop/bridge.json"      # release port
+cat "$HOME/Library/Application Support/com.amdion.desktop.dev/bridge.json"  # dev port
 ```
-
-Tip: while developing, keep `/Applications/AMDION.app` quit (or remove it) so it
-can't grab the bridge port behind your back.

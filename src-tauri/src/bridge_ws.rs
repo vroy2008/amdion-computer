@@ -40,10 +40,25 @@ use tokio_tungstenite::tungstenite::http::{self, StatusCode};
 use tokio_tungstenite::tungstenite::Message;
 
 /// Port range Amdion and the extension both know. The app binds the first free
-/// one; the extension scans the same range, so they rendezvous without the
-/// extension needing to read a file (a background service worker can't).
-const PORT_MIN: u16 = 17872;
+/// one; the extension scans the same ranges (preferring dev), so they rendezvous
+/// without the extension needing to read a file (a background service worker
+/// can't).
+///
+/// Dev and release use SEPARATE ranges so a `tauri dev` build and the installed
+/// `/Applications/AMDION.app` never collide on the bridge port and can run side
+/// by side — the extension prefers the dev range, so "edit → see the new build"
+/// is deterministic (see extension/background.js, DEV_PORTS/REL_PORTS). Split by
+/// build profile via `debug_assertions` (`tauri dev` is a debug build, the
+/// `tauri build` release bundle is not) — the same gate lib.rs uses for
+/// autostart/updater. Keep these in sync with the extension's ranges.
+#[cfg(not(debug_assertions))]
+const PORT_MIN: u16 = 17872; // release: 17872–17882
+#[cfg(not(debug_assertions))]
 const PORT_MAX: u16 = 17882;
+#[cfg(debug_assertions)]
+const PORT_MIN: u16 = 17883; // dev: 17883–17893
+#[cfg(debug_assertions)]
+const PORT_MAX: u16 = 17893;
 
 /// Exact `chrome-extension://<id>` origin to allow. The id is pinned by the
 /// `key` in `extension/manifest.json`, so only Amdion's own companion extension

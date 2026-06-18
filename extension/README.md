@@ -30,7 +30,9 @@ can allowlist exactly this extension's origin
 
 ## Protocol
 
-JSON `{ type, payload }` over `ws://127.0.0.1:<17872–17882>`:
+JSON `{ type, payload }` over `ws://127.0.0.1:<port>` — the extension scans the
+dev range (17883–17893) first, then the release range (17872–17882), so a running
+`tauri dev` build is preferred over the installed app:
 
 - **→ app:** `hello`, `tab_opened`, `tab_activated`, `tab_closed`, `tab_navigated`, `idle_state`, `ping`
 - **← app:** `friction { level, blockList }`, `open_tab { url }`, `focus_tab { tabId }`, `close_tab { tabId }`
