@@ -268,11 +268,21 @@ pub fn run() {
 
             // Launch-at-login: keep the OS login item in sync with the saved
             // preference (on by default; toggled in Settings → Advanced).
+            // Dev builds NEVER register autostart and actively clear any stale
+            // agent: a `tauri dev` binary wired to launch at login becomes a
+            // zombie that steals the bridge port from your next run, so the
+            // extension talks to old code (see docs/DEV.md). Release honors the
+            // saved preference.
             {
                 use tauri_plugin_autostart::ManagerExt;
-                let want = config::read_config().autostart;
                 let mgr = app.autolaunch();
-                let _ = if want { mgr.enable() } else { mgr.disable() };
+                #[cfg(debug_assertions)]
+                let _ = mgr.disable();
+                #[cfg(not(debug_assertions))]
+                {
+                    let want = config::read_config().autostart;
+                    let _ = if want { mgr.enable() } else { mgr.disable() };
+                }
             }
 
             // Register the global summon shortcut from the saved config, falling

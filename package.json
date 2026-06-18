@@ -4,8 +4,10 @@
   "description": "Amdion — a calm focus layer over your Mac",
   "scripts": {
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "dev": "sh scripts/dev-clean.sh && tauri dev",
+    "build": "tauri build",
+    "dev:clean": "sh scripts/dev-clean.sh",
+    "dev:reset": "sh scripts/reset-data.sh"
   },
   "author": "AMDION",
   "license": "MIT",
