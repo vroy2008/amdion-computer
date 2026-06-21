@@ -1,27 +1,49 @@
 # Amdion Computer
 
-**One calm attention layer over your Mac.** Amdion tunes your machine and your real browser for attention, senses how you're actually working, responds with exactly the amount of friction you chose, and quietly keeps an honest record — built so an AI agent can plug into it later.
+**A calm layer for your attention, on your Mac.** Amdion helps you *see* where your attention goes on your computer and *manage* it — so you're driving, not being driven. Everything stays on your device.
 
-It's not an OS replacement and not a browser you live inside. It's an attention *layer*: a calm front door you summon from the menu bar, plus a companion extension that declutters and observes the real Chrome you already use.
+It's not an OS replacement and not a browser you live inside. It's an attention *layer*: a calm front door you summon from the menu bar, plus a companion extension that watches — and, when you ask it to, gently defends — the real Chrome you already use.
 
 ![Amdion Logo](amdion_logo_new.png)
 
-## The four pillars
+## What V1 is
 
-- **The Interface** — a minimalist, text-only front door you summon with `⌃⇧A`. Lives in the menu bar; no Dock icon, no window to manage.
-- **The Assistant** — chat (Gemini) that helps you act without diving into the distraction zone.
-- **The Coach** — rare, gentle, configurable friction. Off / Soft / Lock-In.
-- **The Observer** — passive session logging with honest daily stats and graphs.
+Two halves that connect over a localhost bridge:
 
-Plus **Read Mode** — a Kindle-like in-page reader that locks out distractions for the length of an article — and a **Setup & tuning** first-run that declutters your Mac and Chrome in ~60 seconds.
+```
+Desktop app  ──intent / friction──▶  Extension (Defend)
+   Sense          localhost WS           Act
+ (log / review)  ◀──activity / track──  (Off / Nudge / Block)
+```
+
+- **Desktop app — Sense.** Summon it with `⌃⇧A`. Say what you're here to do (your **intent**), and it keeps an honest, private record of how you actually spend your time — which you can review in **Today** and export to CSV/JSON. Lives in the menu bar; no Dock icon, no window to manage.
+- **Chrome extension — Defend.** A companion that always *tracks* your browsing, and applies exactly the friction you choose on a set of distraction sites:
+
+  | Mode | What it does |
+  |------|--------------|
+  | **Off** | Track only — just watches. |
+  | **Nudge** | A quiet in-page nudge card on distraction sites. |
+  | **Block** | Redirects distraction sites to a calm blocked page. |
+
+  The toggle lives in the **extension's toolbar button**. When the app is connected and you've set an intent, your intent picks the mode for you:
+
+  | Intent | Mode |
+  |--------|------|
+  | Deep work | Block |
+  | Communication | Nudge |
+  | Exploration | Off |
+
+  A manual toggle is a session-scoped override; a new session or a new intent re-asserts the intent default. With no app connected, Defend starts gently on (**Nudge**), and your last manual choice sticks.
+
+Your real Chrome profile, logins, and other extensions are untouched.
 
 ## Quick start
 
-Amdion runs on **macOS + Chrome**. There's no one-click download yet (a signed build is in the works — see *Status*), so for now you build it from source. It takes about five minutes, most of which is the first Rust compile.
+Amdion runs on **macOS + Chrome**. There's no one-click download yet (a signed build is the demand-phase upgrade — see *Status*), so for now you build it from source. It takes about five minutes, most of which is the first Rust compile. A locally-built app isn't quarantined, so there's no Gatekeeper prompt.
 
 > **Installing with an AI coding agent?** Point it at this repo and tell it: *"Set up and run Amdion on my Mac — install any missing prerequisites, build the Tauri app, then help me load the Chrome extension."* Everything below is what it'll do.
 
-**Prerequisites:** [Rust](https://rustup.rs) · [Node.js](https://nodejs.org) 18+ · Google Chrome · macOS 12+
+**Prerequisites:** [Rust](https://rustup.rs) · [Node.js](https://nodejs.org) 18+ · Google Chrome · macOS 10.15+
 
 **1. Build & run the app**
 
@@ -32,8 +54,9 @@ npm install
 npm run dev          # builds + launches Amdion (first build takes a few minutes)
 ```
 
-An hourglass appears in your menu bar. Press **`⌃⇧A`** to summon the panel.
-(For a standalone `.app` instead of dev mode, run `npm run build` and find it under `src-tauri/target/release/bundle/`.)
+An hourglass appears in your menu bar, and a short first-run walks you through optional Mac tuning and connecting Chrome. Press **`⌃⇧A`** to summon the panel any time.
+
+For a standalone `.app` to keep around instead of dev mode, run `npm run build` and find it under `src-tauri/target/release/bundle/macos/AMDION.app`.
 
 **2. Connect Chrome** (the companion extension)
 
@@ -41,48 +64,43 @@ An hourglass appears in your menu bar. Press **`⌃⇧A`** to summon the panel.
 2. Turn on **Developer mode** (top-right)
 3. Click **Load unpacked** and choose this repo's **`extension/`** folder
 
-A welcome tab confirms **Connected to Amdion** once it links up — now friction, the Observer, and Read Mode work in your real Chrome.
-
-**3. (Optional) Turn on chat**
-
-The Gemini-powered assistant and voice transcription need a key; everything else works without one. Add it in **Settings → Advanced → AI key**, or drop a `.env` in the repo root:
-
-```bash
-echo "GEMINI_API_KEY=your_key_here" > .env
-```
+The extension's toolbar popup shows **Connected** once it links to the app over the localhost bridge — now tracking, the friction modes, and the Today log all reflect your real Chrome.
 
 ## Using it
 
-- **Summon / dismiss** — `⌃⇧A`, or click the menu-bar hourglass. Rebind the shortcut in **Settings → Advanced**.
-- **Set your attention** — type what you're here to do; Amdion greets you with it next session.
-- **Choose your friction** — **Settings → Attention**: **Off** just watches · **Soft** nudges you on distraction sites · **Lock-In** blocks them in Chrome.
-- **Read Mode** — on any article press **`⌃⇧R`** (or click the quiet **READ** pill) for a calm full-screen reader; distractions lock for the length of the read, and `Esc` leaves.
-- **Today** — the bar-chart icon opens your honest daily log: time on computer, per-app and per-site breakdown, reading time. It resets each day.
+- **Summon / dismiss** — `⌃⇧A`, or click the menu-bar hourglass. `Esc` dismisses.
+- **Set your attention** — pick **Deep work · Communication · Exploration**, or name your own. The intent is per-session and is recorded to your honest log; when connected, it also drives the extension's mode.
+- **Choose your friction directly** — open the extension's toolbar button and pick **Off · Nudge · Block** for this session. (Setting an intent in the app re-asserts the mapped mode.)
+- **Tune your Mac** — a few reversible tweaks for a quieter desktop, offered during first-run and available any time under **Tune your Mac** on the panel.
+- **Today** — the bar-chart icon opens your honest daily log: time on computer, per-app and per-site breakdown, and sessions. Export the full event log to **CSV / JSON** from there. It resets each day; everything stays on your device.
 
 ## Status
 
-v1 is **built and verified locally** on macOS: the menu-bar front door + first-run Mac/Chrome tuning, the companion extension + configurable friction (live-confirmed over the localhost bridge), the sensing engine + "Today" Observer, Read Mode (reader + distraction-lock + reading stats), a rebindable global summon shortcut, and an in-app auto-updater.
+**V1 core is built and verified locally** on macOS: the menu-bar front door + first-run Mac/Chrome tuning, intent capture, the sensing engine + the **Today** Observer (with CSV/JSON export), and the companion extension's **Off / Nudge / Block** modes with intent-driven switching over the localhost bridge.
 
-The one remaining gate before a **one-click signed download** is Apple notarization (Developer ID). The release pipeline — signed universal DMG on GitHub Releases + auto-update — is built and CI-green; until enrolment lands, build from source as above. A locally-built app runs fine on your own machine.
+The remaining V1 gates are a **real-Chrome end-to-end smoke test** of the three modes and intent switching (the dev environment can't run an MV3 service worker), and packaging polish. **Distribution is app-first / build-from-source** for now — the audience is developers and early adopters. The **demand-phase upgrade** is a one-click path: an Apple Developer signed + notarized DMG with an auto-updater, and the extension on the Chrome Web Store.
 
-> Detailed running log: [STATUS.md](STATUS.md) · vision & architecture: [docs/ROADMAP.md](docs/ROADMAP.md) · build plan: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) · distribution: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+> Detailed running log: [STATUS.md](STATUS.md) · the V1 scope-of-truth: [docs/V1.md](docs/V1.md) · vision & architecture: [docs/ROADMAP.md](docs/ROADMAP.md) · distribution: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · dev loop: [docs/DEV.md](docs/DEV.md).
 
-The AI agent is deferred, but the architecture reserves a clean data/action surface for it.
+### Beyond V1 (also in the repo)
+
+The repo carries a **bonus shelf** — Read Mode (an in-page reader, `⌃⇧R`), Notes/Capture (`⌃⇧C`), Present, and a page-reshaping layer (declutter / feed-fade / drift nudges) — plus a **deferred assistant**. None of these are part of the V1 spine, and the extension is laid out to isolate them (`core/` + a `features/` registry) so they can be edited without touching core.
+
+> **Heads-up:** the default-*off* unlock gate is not wired yet. The feature registry exists but currently defaults every feature *on* ([`extension/core/registry.js`](extension/core/registry.js) — `isEnabled` returns true when a flag is absent), and the feature content scripts are registered active in the manifest. So a freshly loaded extension **also runs these behaviors** (declutter on distraction sites, the in-page Read pill, the `⌃⇧R` / `⌃⇧C` hotkeys). Gating them dormant by default is a planned follow-up; V1's *intended* surface is just Sense + Off/Nudge/Block.
 
 ## Architecture
 
-- **Tauri v2** — Rust backend, native window management, macOS idle/active sensing, SQLite event store (~13 MB binary).
-- **Chrome extension (MV3)** — declutters your real Chrome, reports tab activity, applies friction, hosts Read Mode. Talks to the app over a **localhost WebSocket**.
-- **Gemini** (`reqwest`) — chat and audio transcription.
-- **Vanilla frontend** — HTML/CSS/JS front door, settings, and Observer UI.
+- **Tauri v2** — Rust backend: native menu-bar window, macOS idle/active/screen sensing, a SQLite event store, and the localhost WebSocket bridge.
+- **Chrome extension (MV3)** — `core/` (bridge, activity track, nudge, block) talks to the app over a **localhost WebSocket**. Bonus modules live under `features/` behind a registry-based enable map — which today defaults *on*, so they currently run as well (see *Beyond V1*).
+- **Vanilla frontend** — HTML/CSS/JS for the front door, intent, and Observer UI, via a small `bridge.js` adapter.
 
 ## Project structure
 
 ```
-src-tauri/   # Tauri v2 Rust backend (app, sensing, db, bridge, gemini, commands)
-frontend/    # Front door + settings + Observer UI, bridge.js adapter
-extension/   # Chrome MV3 extension (declutter, friction, Read Mode, activity bridge)
-docs/        # ROADMAP, IMPLEMENTATION_PLAN, DEPLOYMENT, product concept
+src-tauri/   # Tauri v2 Rust backend (app, sensing, db, bridge, commands)
+frontend/    # Front door + Observer UI, bridge.js adapter
+extension/   # Chrome MV3 extension — core/ (track, nudge, block) + features/ (bonus)
+docs/        # V1 scope, ROADMAP, DEPLOYMENT, DEV loop, product concept
 ```
 
 ---
