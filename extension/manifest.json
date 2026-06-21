@@ -54,6 +54,11 @@
     },
     {
       "matches": ["<all_urls>"],
+      "js": ["features/reshape/nudge-triggers.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
       "js": ["features/notes/capture.js"],
       "run_at": "document_idle"
     },

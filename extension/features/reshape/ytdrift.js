@@ -12,6 +12,7 @@
 (() => {
   const EXT = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id ? chrome : null;
   if (!EXT) return;
+  const NS = (window.__amdion = window.__amdion || {});
 
   const HOST = location.hostname.replace(/^www\./, '');
   const N = 7; // generous — a few suggested clicks are fine; a chain is the trap
@@ -26,7 +27,7 @@
   // Is YouTube reshaped right now? Prefer reshape.js's shared state; fall back to
   // storage. Drift is friction-independent, gated only on the reshape switch.
   function reshapeOn(cb) {
-    const live = globalThis.__amdionReshape;
+    const live = NS.reshape;
     if (live && typeof live.on === 'boolean' && live.host === HOST) return cb(live.on);
     EXT.storage.local.get(['reshape', 'distractions'], (r) => {
       const reshape = r.reshape || { enabled: true, disabledSites: [] };
@@ -43,7 +44,7 @@
       hops += 1; // a fresh video reached from another video (v param changed)
       if (hops >= N) {
         reshapeOn((on) => {
-          if (on && globalThis.__amdionNudge) globalThis.__amdionNudge.show({ reason: 'drift' });
+          if (on && NS.nudge) NS.nudge.show({ reason: 'drift' });
           hops = 0; // reset so we don't fire on every subsequent hop
         });
       }

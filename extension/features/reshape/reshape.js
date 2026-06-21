@@ -9,16 +9,17 @@
 //   html.amdion-feedfade  → feed-fade is enabled (content/feedfade.js)
 //   html.amdion-yt-home   → hide the YouTube home grid (declutter.css)
 //
-// CSS reads the classes; the JS scripts (nudge over-scroll, feedfade, ytdrift)
-// read `globalThis.__amdionReshape`, kept current here, with an
-// `__amdionReshapeReady` promise for scripts that want to wait for the first
-// resolve. Default-on for the distraction set means the always-on declutter that
+// CSS reads the classes; the JS scripts (nudge-triggers, feedfade, ytdrift) read
+// `window.__amdion.reshape`, kept current here, with a `window.__amdion.reshapeReady`
+// promise for scripts that want to wait for the first resolve. Default-on for the
+// distraction set means the always-on declutter that
 // shipped keeps working with no regression; a brief unstyled flash before the
 // first storage read is the accepted cost of a permissionless, file-free gate.
 
 (() => {
   const EXT = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id ? chrome : null;
   if (!EXT) return;
+  const NS = (window.__amdion = window.__amdion || {});
 
   const BUILTIN_DISTRACTIONS = [
     'youtube.com', 'twitter.com', 'x.com', 'facebook.com', 'instagram.com',
@@ -35,7 +36,7 @@
 
   // Shared, mutated-in-place so readers that hold the reference see live updates.
   const state = { on: false, feedFade: false, ytHome: false, host: HOST };
-  globalThis.__amdionReshape = state;
+  NS.reshape = state;
 
   const onList = (host, list) =>
     (list || []).some((d) => host === d || host.endsWith('.' + d) || CANON === d);
@@ -61,7 +62,7 @@
   }
 
   let resolveReady;
-  globalThis.__amdionReshapeReady = new Promise((res) => { resolveReady = res; });
+  NS.reshapeReady = new Promise((res) => { resolveReady = res; });
 
   EXT.storage.local.get(['reshape', 'distractions'], (r) => {
     apply(r.reshape, r.distractions);

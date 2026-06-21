@@ -2,32 +2,24 @@
 // Reads config from chrome.storage (written by the background worker) and reacts
 // to changes. Rendered in a shadow root so the host page's CSS can't touch it.
 //
-// One card, several triggers (docs/REORIENTATION.md §5):
-//   • landing      — you land on a distraction while friction is "soft" (the
-//                     original behavior; friction-gated).
-//   • over-scroll  — you've actively scrolled a feed well past the point of
-//                     value (sensed here; reshape-gated, friction-independent).
-//   • redirect     — an ad/redirect chain dropped you on a distraction
-//                     (detected in background.js → message; reshape-gated).
-//   • idle-return  — you came back from a break onto an open distraction
-//                     (detected in background.js → message; reshape-gated).
-//   • drift        — a YouTube watch→watch rabbit hole (content/ytdrift.js calls
-//                     globalThis.__amdionNudge.show).
+// This file is CORE: the card itself + the one friction-gated trigger —
+//   • landing — you land on a distraction while friction is "soft" (the original
+//               behavior; friction-gated).
 //
-// Behavioral triggers are gated on the per-site *reshape* switch, not the
-// friction level — so a site can be calmed even in Off mode (§9). When an intent
-// is set for the session the copy adapts ("You're here for X — is HOST part of
-// that?"). At most one nudge per page load, so we never nag.
+// The card is the shared renderer for every trigger. The reshape-gated behavioral
+// triggers (over-scroll, redirect, idle-return, YouTube drift) live in the reshape
+// feature — features/reshape/nudge-triggers.js and ytdrift.js — and raise this card
+// through the published window.__amdion.nudge.show({reason}) API, so core never
+// depends on the reshape feature. When an intent is set for the session the copy
+// adapts ("You're here for X — is HOST part of that?"). At most one nudge per page
+// load, so we never nag.
 
 (() => {
   const EXT = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id ? chrome : null;
   if (!EXT) return;
+  const NS = (window.__amdion = window.__amdion || {});
 
   const HOST = location.hostname.replace(/^www\./, '');
-  const BUILTIN_DISTRACTIONS = [
-    'youtube.com', 'twitter.com', 'x.com', 'facebook.com', 'instagram.com',
-    'reddit.com', 'tiktok.com', 'netflix.com', 'twitch.tv',
-  ];
   let dismissed = false; // one nudge per page load, once dealt with
   let mount = null;
   let mountReason = null;
@@ -56,20 +48,6 @@
     if (!key) return false;
     return PROTECTED_PATHS[key].some((p) => path === p || path.startsWith(p + '/'));
   };
-
-  // Is this host reshaped right now? Mirrors content/reshape.js. We prefer the
-  // live shared state it publishes, falling back to storage when a behavioral
-  // trigger somehow fires before reshape.js resolved.
-  function reshapeOn(cb) {
-    const live = globalThis.__amdionReshape;
-    if (live && typeof live.on === 'boolean' && live.host === HOST) return cb(live.on);
-    EXT.storage.local.get(['reshape', 'distractions'], (r) => {
-      const reshape = r.reshape || { enabled: true, disabledSites: [] };
-      const distractions = r.distractions || BUILTIN_DISTRACTIONS;
-      if (reshape.enabled === false || onList(HOST, reshape.disabledSites)) return cb(false);
-      cb(onDistraction(distractions));
-    });
-  }
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) =>
@@ -205,15 +183,16 @@
     });
   }
 
-  // A behavioral trigger (over-scroll / redirect / idle-return / drift). Honors
-  // the protected-path guard and the one-per-load rule; reshape/distraction
-  // gating is the caller's job (background.js for redirect/idle; reshapeOn here
-  // for over-scroll; ytdrift.js for drift).
+  // A behavioral trigger (over-scroll / redirect / idle-return / drift), raised by
+  // the reshape feature through the shared API. Honors the protected-path guard and
+  // the one-per-load rule; reshape/distraction gating is the caller's job
+  // (features/reshape/background.js for redirect/idle, nudge-triggers.js for
+  // over-scroll, ytdrift.js for drift).
   function fireBehavioral(reason) {
     if (mount || dismissed || isProtectedPath()) return;
     // A calm long read isn't a drift to interrupt — suppress every behavioral
-    // trigger on an article-like page (over-scroll already pre-checks; this also
-    // covers the background-driven redirect / idle-return signals and drift).
+    // trigger on an article-like page (covers over-scroll, the background-driven
+    // redirect / idle-return signals, and drift).
     const readerable = typeof isProbablyReaderable !== 'undefined' && (() => {
       try { return isProbablyReaderable(document); } catch (_) { return false; }
     })();
@@ -221,45 +200,13 @@
     show(reason);
   }
 
-  // ── Over-scroll sensing ─────────────────────────────────────────────────
-  // Active-scroll *time* is the honest signal (raw screen count nags a genuine
-  // long read). We accumulate time only between scroll events close in time;
-  // gaps reset nothing but stop accruing. Generous default; once per page load;
-  // suppressed on reader-able pages and protected paths.
-  const OVERSCROLL_MS = 70000; // ~70s of active scrolling past the fold
-  let lastScrollTs = 0;
-  let activeScrollMs = 0;
-  let overscrollFired = false;
-  function onScroll() {
-    if (overscrollFired || dismissed) return;
-    const now = Date.now();
-    if (lastScrollTs && now - lastScrollTs < 1500) activeScrollMs += now - lastScrollTs;
-    lastScrollTs = now;
-    if (activeScrollMs < OVERSCROLL_MS) return;
-    // Suppress on article-like pages (the reader group's readerable check shares
-    // our isolated world); never on protected paths. These are page-load-stable,
-    // so latch and stop checking.
-    const readerable = typeof isProbablyReaderable !== 'undefined' && (() => {
-      try { return isProbablyReaderable(document); } catch (_) { return false; }
-    })();
-    if (readerable || isProtectedPath()) { overscrollFired = true; return; }
-    // Reshape can be flipped on mid-session; only consume the trigger once we
-    // actually fire, so enabling reshape on an open tab still lets it nudge.
-    reshapeOn((on) => { if (on) { overscrollFired = true; fireBehavioral('overscroll'); } });
-  }
-
   // ── Wiring ────────────────────────────────────────────────────────────────
   refresh();
   EXT.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && (changes.friction || changes.distractions || changes.intent)) refresh();
   });
-  window.addEventListener('scroll', onScroll, { passive: true });
-  EXT.runtime.onMessage.addListener((msg) => {
-    if (!msg || msg.type !== 'amdion-nudge') return;
-    fireBehavioral(msg.reason); // background already checked reshape + distraction
-  });
 
-  // Shared API so other content scripts (e.g. content/ytdrift.js) can raise the
-  // same card without duplicating its markup.
-  globalThis.__amdionNudge = { show: (opts) => fireBehavioral((opts && opts.reason) || 'landing'), hide: remove };
+  // Shared API so the reshape triggers (features/reshape/nudge-triggers.js,
+  // ytdrift.js) can raise the same card without duplicating its markup.
+  NS.nudge = { show: (opts) => fireBehavioral((opts && opts.reason) || 'landing'), hide: remove };
 })();

@@ -16,6 +16,7 @@
   const EXT = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id ? chrome : null;
   if (!EXT) return;
   if (window.top !== window) return; // top frame only
+  const NS = (window.__amdion = window.__amdion || {});
 
   const HOST = location.hostname.replace(/^www\./, '');
   const SITE = HOST === 'twitter.com' || HOST.endsWith('.twitter.com') ? 'x'
@@ -136,6 +137,6 @@
   function sync() { if (enabled()) start(); else stop(); }
 
   // reshape.js resolves async; wait for it, then track class changes on <html>.
-  (globalThis.__amdionReshapeReady || Promise.resolve()).then(sync);
+  (NS.reshapeReady || Promise.resolve()).then(sync);
   new MutationObserver(sync).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 })();
