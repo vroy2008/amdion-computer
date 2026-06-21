@@ -103,7 +103,6 @@
       transition: background .15s, border-color .15s;
     }
     .intent-chip:hover { background: var(--accent-soft); border-color: var(--accent); }
-    .chip-mode { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
     .ghost-chip { justify-content: flex-start; color: var(--muted); font-size: 13px; }
     .ghost-chip.active { color: var(--fg); border-color: var(--accent); }
     .intent-custom { display: flex; flex-direction: column; gap: 7px; }
@@ -112,8 +111,6 @@
     .intent-skip { background: none; border: none; color: var(--muted); font-size: 12px;
       cursor: pointer; align-self: flex-start; padding: 2px 0; }
     .intent-skip:hover { color: var(--fg); }
-    .mode-badge { font-size: 10px; color: var(--accent); border: 1px solid var(--accent);
-      border-radius: 5px; padding: 1px 5px; margin-left: 4px; letter-spacing: 0.05em; vertical-align: middle; }
 
     .intent-active {
       background: var(--accent-soft); border: 1px solid var(--border-strong);
@@ -164,10 +161,6 @@
     .disclosure > summary { font-size: 12px; color: var(--accent); }
     details.adv > summary { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
     details.adv .adv-body { padding-top: 4px; }
-
-    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
-    .seg button { background: none; border: none; color: var(--muted); padding: 7px 12px; font-size: 12px; }
-    .seg button.active { background: var(--accent); color: #fff; }
 
     .tweak { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
     .tweak:first-child { border-top: none; }
@@ -283,27 +276,16 @@
     <div id="intent-prompt" class="intent-prompt hidden">
       <div class="intent-q">What has your attention?</div>
       <div class="intent-presets" id="intent-presets">
-        <button class="intent-chip" data-label="Deep work" data-mode="lockin">
-          <span>Deep work</span><span class="chip-mode">Block</span>
-        </button>
-        <button class="intent-chip" data-label="Communication" data-mode="soft">
-          <span>Communication</span><span class="chip-mode">Nudge</span>
-        </button>
-        <button class="intent-chip" data-label="Exploration" data-mode="off">
-          <span>Exploration</span><span class="chip-mode">Off</span>
-        </button>
+        <button class="intent-chip" data-label="Deep work" data-mode="lockin">Deep work</button>
+        <button class="intent-chip" data-label="Communication" data-mode="soft">Communication</button>
+        <button class="intent-chip" data-label="Exploration" data-mode="off">Exploration</button>
         <button class="intent-chip ghost-chip" id="intent-custom-toggle">
           <span>Something else…</span>
         </button>
       </div>
       <div class="intent-custom hidden" id="intent-custom">
         <input type="text" id="intent-input" placeholder="Name it…" maxlength="60">
-        <div class="intent-custom-row">
-          <div class="seg" id="seg-intent-mode">
-            <button data-v="off">Off</button>
-            <button data-v="soft">Nudge</button>
-            <button data-v="lockin">Block</button>
-          </div>
+        <div class="intent-custom-row" style="justify-content:flex-end;">
           <button class="btn primary small" id="intent-save">Set</button>
         </div>
       </div>
@@ -312,7 +294,7 @@
 
     <div id="intent-display" class="intent-active hidden">
       <div class="grow">
-        <div class="label">Attention on <span class="mode-badge" id="intent-mode-badge"></span></div>
+        <div class="label">Attention on</div>
         <div class="text" id="intent-text"></div>
       </div>
       <button class="btn ghost small" id="intent-clear">Clear</button>
@@ -390,8 +372,8 @@
             <rect x="31" y="95" width="58" height="5" rx="2.5" fill="#163f5d"/>
           </svg>
           <div class="ob-wordmark">AMDION</div>
-          <h2 class="ob-headline">A calm layer for<br>your attention.</h2>
-          <p class="ob-sub">Say what you're here to do. Amdion holds distractions at arm's length, then steps aside — all on your device.</p>
+          <h2 class="ob-headline">Manage your<br>attention.</h2>
+          <p class="ob-sub">Amdion helps you see where your attention goes on this device — so you're driving, not being driven.</p>
           <div class="ob-hint"><span class="summon-kbd">⌃⇧A</span> summons it anytime</div>
         </div>
       </div>
@@ -501,8 +483,9 @@
     }
 
     // ── Intent ──
-    // Each intent maps onto an extension mode (V1.md §3.2); the badge shows it.
-    const MODE_LABEL = { off: 'Off', soft: 'Nudge', lockin: 'Block' };
+    // Intent is the panel's only attention lever; the mode it maps onto (V1.md
+    // §3.2) is resolved by the backend and surfaced in the extension action, not
+    // here — the panel stays about *what you're here to do*, not friction levels.
     function renderHome() {
       renderUptime();
       const has = !!state.intent;
@@ -514,7 +497,6 @@
       $('intent-prompt').classList.toggle('hidden', has || !greetingOn || intentDismissedThisSession);
       if (has) {
         $('intent-text').textContent = state.intent;
-        $('intent-mode-badge').textContent = MODE_LABEL[state.intentMode] || '';
       }
     }
     // Collapse + clear the custom-intent form back to its resting state.
@@ -718,10 +700,6 @@
       }
     }
 
-    // ── Shared: segmented control (used by the intent custom-mode form) ──
-    function setSeg(segEl, value) {
-      segEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === value));
-    }
     // ── Onboarding (welcome → optional tune → done) ──
     let obStep = 0;
     const OB_TITLES = ['WELCOME', 'TUNE YOUR MAC', 'CONNECT CHROME', 'ALL SET'];
@@ -780,18 +758,14 @@
         const willShow = $('intent-custom').classList.contains('hidden');
         $('intent-custom').classList.toggle('hidden', !willShow);
         $('intent-custom-toggle').classList.toggle('active', willShow);
-        if (willShow) {
-          if (!$('seg-intent-mode').querySelector('.active')) setSeg($('seg-intent-mode'), 'soft');
-          $('intent-input').focus();
-        }
+        if (willShow) $('intent-input').focus();
       };
-      $('seg-intent-mode').querySelectorAll('button').forEach(b =>
-        b.onclick = () => setSeg($('seg-intent-mode'), b.dataset.v));
       const saveCustomIntent = () => {
         const label = $('intent-input').value.trim();
         if (!label) return;
-        const mode = $('seg-intent-mode').querySelector('.active')?.dataset.v || 'soft';
-        setIntent(label, mode);
+        // Custom intents carry no explicit mode; the backend maps them to the
+        // gentle default (Nudge) — see session.rs resolve_mode/preset_mode.
+        setIntent(label, null);
       };
       $('intent-save').onclick = saveCustomIntent;
       $('intent-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCustomIntent(); });
