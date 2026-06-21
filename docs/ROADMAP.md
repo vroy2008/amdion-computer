@@ -2,6 +2,8 @@
 
 > **Source of truth.** This doc supersedes the technical sections of [focused_computer.md](focused_computer.md) (which remains the product/philosophy concept). For the concrete build steps, see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 >
+> **Current scope & status** live in the [README](../README.md) and [docs/V1.md](V1.md). This is a vision/architecture document: the dated "Current status" notes below are historical (written pre-V1-build) and do not reflect what's shipped today — trust the README for that. Friction modes were also renamed since this was written (Off / Soft / Lock-In → **Off / Nudge / Block**).
+>
 > _Last updated: 2026-06-13._
 
 ---

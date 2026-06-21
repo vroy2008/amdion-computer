@@ -2,6 +2,16 @@
 name = "amdion-computer"
 version = "1.0.0"
 edition = "2021"
+license = "MIT"
+
+[features]
+# V1 ships nothing in `default`. The Gemini-backed assistant (chat + audio
+# transcription) is intentionally NOT part of V1 — kept in-tree but compiled out
+# unless you opt in with `--features assistant`, which is the only thing that
+# compiles the Gemini client and its calls to Google. (The auto-updater pulls
+# its own HTTP client regardless; in V1 that GitHub check is the only network use.)
+default = []
+assistant = ["dep:reqwest"]
 
 [lib]
 name = "amdion_computer_lib"
@@ -20,7 +30,10 @@ tauri-plugin-autostart = "2"
 tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", features = ["json"] }
+# The Gemini assistant's HTTP client — optional, compiled only with
+# `--features assistant` (see [features]). The default V1 build never calls
+# Google. (The auto-updater pulls its own reqwest for the GitHub check.)
+reqwest = { version = "0.12", features = ["json"], optional = true }
 tokio = { version = "1", features = ["full"] }
 base64 = "0.22"
 chrono = "0.4"

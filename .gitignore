@@ -5,6 +5,12 @@ out/
 .DS_Store
 .env
 journals/
-package-lock.json
 Thumbs.db
 src-tauri/target/
+
+# Editor / agent scratch config
+.claude/
+
+# Dead pre-pivot artifact: the app reads its config from the app-data dir, not
+# the repo root. Ignored so the personal copy can't be re-committed.
+config.json

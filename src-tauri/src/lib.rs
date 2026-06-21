@@ -10,6 +10,9 @@ mod classify;
 mod commands;
 mod config;
 mod db;
+// The Gemini assistant is an off-by-default feature, not part of V1 (see
+// `Cargo.toml` [features]); the network client compiles only with it.
+#[cfg(feature = "assistant")]
 mod gemini;
 mod sensing;
 mod state;

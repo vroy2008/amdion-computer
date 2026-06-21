@@ -58,9 +58,9 @@ jobs:
         with:
           workspaces: src-tauri
 
-      # package-lock.json is gitignored in this repo, so use `install`, not `ci`.
+      # package-lock.json is tracked, so use `ci` for a reproducible install.
       - name: Install JS deps (Tauri CLI)
-        run: npm install
+        run: npm ci
 
       # Apple Developer ID signing + notarization only kick in once these secrets
       # exist. Do NOT pass empty APPLE_* vars to the build: Tauri treats a

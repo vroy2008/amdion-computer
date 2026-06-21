@@ -161,7 +161,9 @@ impl Default for ReadingPrefs {
 }
 
 fn default_model() -> String {
-    "gemini-3.1-flash-lite-preview".to_string()
+    // The assistant is an off-by-default feature (see Cargo `assistant`); no
+    // model id ships by default. Set one when enabling the assistant.
+    String::new()
 }
 
 fn default_friction() -> String {
