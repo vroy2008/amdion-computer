@@ -92,8 +92,28 @@
     .greeting { font-size: 23px; font-weight: 300; margin: 8px 0 22px; }
     .greeting.error { font-size: 14px; color: var(--err); }
 
-    .intent-row { display: flex; gap: 8px; }
-    .intent-row input { font-size: 14px; padding: 12px 13px; }
+    .intent-prompt { display: flex; flex-direction: column; gap: 9px; }
+    .intent-q { font-size: 13px; color: var(--muted); }
+    .intent-presets { display: flex; flex-direction: column; gap: 6px; }
+    .intent-chip {
+      display: flex; align-items: center; justify-content: space-between;
+      font: inherit; font-size: 14px; cursor: pointer; text-align: left;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--fg); border-radius: 10px; padding: 11px 13px;
+      transition: background .15s, border-color .15s;
+    }
+    .intent-chip:hover { background: var(--accent-soft); border-color: var(--accent); }
+    .chip-mode { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+    .ghost-chip { justify-content: flex-start; color: var(--muted); font-size: 13px; }
+    .ghost-chip.active { color: var(--fg); border-color: var(--accent); }
+    .intent-custom { display: flex; flex-direction: column; gap: 7px; }
+    .intent-custom input { font-size: 14px; padding: 11px 13px; }
+    .intent-custom-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+    .intent-skip { background: none; border: none; color: var(--muted); font-size: 12px;
+      cursor: pointer; align-self: flex-start; padding: 2px 0; }
+    .intent-skip:hover { color: var(--fg); }
+    .mode-badge { font-size: 10px; color: var(--accent); border: 1px solid var(--accent);
+      border-radius: 5px; padding: 1px 5px; margin-left: 4px; letter-spacing: 0.05em; vertical-align: middle; }
 
     .intent-active {
       background: var(--accent-soft); border: 1px solid var(--border-strong);
@@ -291,15 +311,39 @@
     <div class="uptime" id="uptime"></div>
     <div class="greeting" id="greeting">Welcome back.</div>
 
-    <div id="intent-prompt" class="intent-row hidden">
-      <input type="text" id="intent-input" placeholder="What has your attention?">
-      <button class="btn primary" id="intent-save">Set</button>
-      <button class="btn ghost" id="intent-skip" title="Not now — just here">Skip</button>
+    <div id="intent-prompt" class="intent-prompt hidden">
+      <div class="intent-q">What has your attention?</div>
+      <div class="intent-presets" id="intent-presets">
+        <button class="intent-chip" data-label="Deep work" data-mode="lockin">
+          <span>Deep work</span><span class="chip-mode">Block</span>
+        </button>
+        <button class="intent-chip" data-label="Communication" data-mode="soft">
+          <span>Communication</span><span class="chip-mode">Nudge</span>
+        </button>
+        <button class="intent-chip" data-label="Exploration" data-mode="off">
+          <span>Exploration</span><span class="chip-mode">Off</span>
+        </button>
+        <button class="intent-chip ghost-chip" id="intent-custom-toggle">
+          <span>Something else…</span>
+        </button>
+      </div>
+      <div class="intent-custom hidden" id="intent-custom">
+        <input type="text" id="intent-input" placeholder="Name it…" maxlength="60">
+        <div class="intent-custom-row">
+          <div class="seg" id="seg-intent-mode">
+            <button data-v="off">Off</button>
+            <button data-v="soft">Nudge</button>
+            <button data-v="lockin">Block</button>
+          </div>
+          <button class="btn primary small" id="intent-save">Set</button>
+        </div>
+      </div>
+      <button class="intent-skip" id="intent-skip" title="Not now — just here">Skip for now</button>
     </div>
 
     <div id="intent-display" class="intent-active hidden">
       <div class="grow">
-        <div class="label">Attention on</div>
+        <div class="label">Attention on <span class="mode-badge" id="intent-mode-badge"></span></div>
         <div class="text" id="intent-text"></div>
       </div>
       <button class="btn ghost small" id="intent-clear">Clear</button>
@@ -321,12 +365,7 @@
       <div class="section">
         <h3>Attention</h3>
         <div class="row">
-          <div><div class="label-main">Friction</div><div class="label-sub"><b>Off</b> just watches · <b>Soft</b> nudges · <b>Lock-In</b> blocks distractions, in your real Chrome.</div></div>
-          <div class="seg" id="seg-friction">
-            <button data-v="off">Off</button>
-            <button data-v="soft">Soft</button>
-            <button data-v="lockin">Lock-In</button>
-          </div>
+          <div><div class="label-main">Mode</div><div class="label-sub"><b>Off</b> watches · <b>Nudge</b> nudges · <b>Block</b> blocks distractions. Follows your <b>intent</b>, or set it manually from the Amdion button in Chrome's toolbar.</div></div>
         </div>
         <div class="row">
           <div><div class="label-main">Session greeting</div><div class="label-sub">Ask what has your attention each new session.</div></div>
@@ -633,6 +672,8 @@
     }
 
     // ── Intent ──
+    // Each intent maps onto an extension mode (V1.md §3.2); the badge shows it.
+    const MODE_LABEL = { off: 'Off', soft: 'Nudge', lockin: 'Block' };
     function renderHome() {
       renderUptime();
       const has = !!state.intent;
@@ -642,11 +683,22 @@
       g.classList.remove('error');
       $('intent-display').classList.toggle('hidden', !has);
       $('intent-prompt').classList.toggle('hidden', has || !greetingOn || intentDismissedThisSession);
-      if (has) $('intent-text').textContent = state.intent;
+      if (has) {
+        $('intent-text').textContent = state.intent;
+        $('intent-mode-badge').textContent = MODE_LABEL[state.intentMode] || '';
+      }
     }
-    async function setIntent(value) {
-      state = await api.setIntent(value || null);
+    // Collapse + clear the custom-intent form back to its resting state.
+    function resetIntentCustom() {
+      $('intent-custom').classList.add('hidden');
+      $('intent-custom-toggle').classList.remove('active');
       $('intent-input').value = '';
+    }
+    // label = the intent text; mode = the friction level it maps onto ("off"/
+    // "soft"/"lockin"), or null to let the backend apply the preset default.
+    async function setIntent(label, mode) {
+      state = await api.setIntent(label || null, mode || null);
+      resetIntentCustom();
       renderHome();
     }
 
@@ -661,8 +713,9 @@
       if (config && !config.onboardingComplete) { startOnboarding(); return; }
       if (isNewSession) {
         intentDismissedThisSession = false;
+        resetIntentCustom();
         if (state && state.intent) {
-          try { state = await api.setIntent(null); } catch (_) {}
+          try { state = await api.setIntent(null, null); } catch (_) {}
         }
         anchorComputerSince();
       }
@@ -929,7 +982,6 @@
       $('reshape-sites').classList.toggle('disabled', !$('toggle-reshape').classList.contains('on'));
     }
     function loadSettingsForm() {
-      setSeg($('seg-friction'), config.frictionLevel);
       $('toggle-greeting').classList.toggle('on', config.greetingEnabled);
       $('toggle-autostart').classList.toggle('on', config.autostart !== false);
       $('inp-break').value = config.breakThresholdMins;
@@ -962,7 +1014,6 @@
     }
     async function saveSettings() {
       config = await api.saveConfig({
-        frictionLevel: $('seg-friction').querySelector('.active')?.dataset.v || 'soft',
         greetingEnabled: $('toggle-greeting').classList.contains('on'),
         autostart: $('toggle-autostart').classList.contains('on'),
         breakThresholdMins: parseInt($('inp-break').value, 10) || 5,
@@ -1173,14 +1224,33 @@
         notesSearchTimer = setTimeout(() => loadNotes(v), 180);
       });
 
-      $('intent-save').onclick = () => setIntent($('intent-input').value.trim());
-      $('intent-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') setIntent(e.target.value.trim()); });
-      $('intent-clear').onclick = () => setIntent(null);
-      $('intent-skip').onclick = () => { intentDismissedThisSession = true; $('intent-input').value = ''; renderHome(); };
+      // Intent presets: each chip sets the label + its mapped mode in one tap.
+      $('intent-presets').querySelectorAll('.intent-chip[data-label]').forEach(b =>
+        b.onclick = () => setIntent(b.dataset.label, b.dataset.mode));
+      $('intent-custom-toggle').onclick = () => {
+        const willShow = $('intent-custom').classList.contains('hidden');
+        $('intent-custom').classList.toggle('hidden', !willShow);
+        $('intent-custom-toggle').classList.toggle('active', willShow);
+        if (willShow) {
+          if (!$('seg-intent-mode').querySelector('.active')) setSeg($('seg-intent-mode'), 'soft');
+          $('intent-input').focus();
+        }
+      };
+      $('seg-intent-mode').querySelectorAll('button').forEach(b =>
+        b.onclick = () => setSeg($('seg-intent-mode'), b.dataset.v));
+      const saveCustomIntent = () => {
+        const label = $('intent-input').value.trim();
+        if (!label) return;
+        const mode = $('seg-intent-mode').querySelector('.active')?.dataset.v || 'soft';
+        setIntent(label, mode);
+      };
+      $('intent-save').onclick = saveCustomIntent;
+      $('intent-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCustomIntent(); });
+      $('intent-clear').onclick = () => setIntent(null, null);
+      $('intent-skip').onclick = () => { intentDismissedThisSession = true; resetIntentCustom(); renderHome(); };
 
       $('settings-close').onclick = () => $('settings').classList.add('hidden');
       $('settings-save').onclick = saveSettings;
-      $('seg-friction').querySelectorAll('button').forEach(b => b.onclick = () => setSeg($('seg-friction'), b.dataset.v));
       $('seg-read-theme').querySelectorAll('button').forEach(b => b.onclick = () => setSeg($('seg-read-theme'), b.dataset.v));
       $('toggle-greeting').onclick = (e) => e.target.classList.toggle('on');
       $('toggle-autostart').onclick = (e) => e.target.classList.toggle('on');

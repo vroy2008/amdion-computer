@@ -12,7 +12,9 @@ if (window.__TAURI__) {
     // Fires each time the panel is summoned; payload { newSession } says whether
     // this arrival begins a new session (the door) vs. a re-summon mid-session.
     onPanelSummoned: (cb) => listen('panel-summoned', (e) => cb(e.payload)),
-    setIntent: (intent) => invoke('set_intent', { intent }),
+    // intent = the label (or null to clear); mode = the friction level it maps
+    // onto ("off"|"soft"|"lockin"), null lets the backend apply the preset default.
+    setIntent: (intent, mode) => invoke('set_intent', { intent: intent ?? null, mode: mode ?? null }),
     hidePanel: () => invoke('hide_panel'),
     expandForOnboarding: () => invoke('expand_for_onboarding'),
     retreatToMenubar: () => invoke('retreat_to_menubar'),

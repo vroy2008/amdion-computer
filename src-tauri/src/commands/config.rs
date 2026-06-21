@@ -1,6 +1,6 @@
 // Config commands.
 
-use crate::bridge_ws::{friction_message, read_prefs_message, reshape_message};
+use crate::bridge_ws::{block_list_message, read_prefs_message, reshape_message};
 use crate::config::{read_config, write_config, AppConfig};
 use crate::state::AppState;
 use serde::Deserialize;
@@ -81,7 +81,7 @@ pub fn save_config(
         current.reshape = reshape;
     }
     write_config(&current);
-    let _ = state.bridge_tx.send(friction_message());
+    let _ = state.bridge_tx.send(block_list_message());
     let _ = state.bridge_tx.send(read_prefs_message());
     let _ = state.bridge_tx.send(reshape_message());
     Ok(current)

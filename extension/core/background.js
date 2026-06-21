@@ -7,7 +7,7 @@
 // import manifest — so a feature can be edited in isolation without touching core.
 
 import { connect, send, isConnected, onBridge } from './bridge.js';
-import { BUILTIN_DISTRACTIONS, refreshBlocking } from './block.js';
+import { BUILTIN_DISTRACTIONS, refreshBlocking, applyManualMode } from './block.js';
 import { dispatch, featureDefaults, setEnabledMap } from './registry.js';
 
 // Feature modules — importing them runs their top-level self-registration. Each
@@ -100,26 +100,31 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.runtime.onInstalled.addListener(() => {
   // Seed core defaults + each feature's defaults so content scripts have what they
-  // need before the app first connects (level stays off → no nudge until the app
-  // says otherwise).
+  // need before the app first connects. Default mode = `soft` (Nudge): Defend is
+  // gently-on out of the box, before any app connection (V1.md §3.2). Block stays
+  // opt-in (intent = Deep work, or a manual toggle). Tracking runs in every mode.
   chrome.storage.local.set({
-    friction: { level: 'off', blockList: [] },
+    friction: { level: 'soft', blockList: [] },
     distractions: BUILTIN_DISTRACTIONS,
     readingLock: false,
     intent: null,
     ...featureDefaults(),
   });
+  refreshBlocking();
   connect();
   chrome.tabs.create({ url: chrome.runtime.getURL('walkthrough.html') });
 });
 
-// Let the walkthrough page show live connection status.
+// Let the walkthrough page + the action popup read live connection status, and
+// let the popup set the mode (a manual, session-scoped override). The action
+// itself opens the popup (manifest `action.default_popup`), so there's no
+// onClicked handler — the popup links to the walkthrough for first-time setup.
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg === 'amdion-status') { reply({ connected: isConnected() }); return true; }
-});
-
-chrome.action.onClicked.addListener(() => {
-  chrome.tabs.create({ url: chrome.runtime.getURL('walkthrough.html') });
+  if (msg && msg.type === 'amdion-set-mode') {
+    applyManualMode(msg.level).then(() => reply({ ok: true }));
+    return true; // keep the channel open for the async reply
+  }
 });
 
 // Connect once every import above has registered its handlers and hooks.

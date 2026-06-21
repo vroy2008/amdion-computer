@@ -8,10 +8,15 @@
 //   Ext → App : hello, tab_opened / tab_activated / tab_closed / tab_navigated,
 //               idle_state, read_started / read_ended,
 //               note_captured { kind, source, url, title, page, text, image }, ping
-//   App → Ext : friction { level, blockList }, open_tab { url },
-//               focus_tab { tabId }, close_tab { tabId },
-//               read_mode { on }, read_prefs { theme, typeface, size, wpm, pillEnabled },
+//   App → Ext : block_list { blockList }, intent_mode { level, token, intent, assert },
+//               intent { intent }, open_tab { url }, focus_tab { tabId },
+//               close_tab { tabId }, read_mode { on },
+//               read_prefs { theme, typeface, size, wpm, pillEnabled },
 //               capture_tab {}, present_mode { on }
+//
+// The mode (Off/Nudge/Block) is owned by the extension and driven by `intent_mode`
+// (the intent default) + the action popup (a manual override); `block_list` carries
+// only the distraction set, never the level (see extension/core/block.js, V1.md §3.2).
 //
 // Commands push App→Ext messages by sending an already-serialized JSON string on
 // `AppState.bridge_tx` (a broadcast channel); each connection's pump forwards it.
@@ -168,14 +173,23 @@ async fn handle_conn(
                         broadcast_connected(&app, &conns);
                         // Configure the extension the instant it connects — the
                         // broadcast reaches our own freshly-subscribed `rx`.
-                        let _ = tx.send(friction_message());
+                        let _ = tx.send(block_list_message());
                         let _ = tx.send(read_prefs_message());
                         let _ = tx.send(reshape_message());
-                        // The current session intent (in-memory, not config) so
-                        // in-page nudge copy can adapt right away.
+                        // The current session intent (in-memory, not config): the
+                        // `intent` copy for in-page nudges, and the `intent_mode`
+                        // contract re-sync. This is a passive reconnect re-sync
+                        // (assert:false) — it won't clobber a manual override unless
+                        // the session/intent has changed (V1.md §3.2).
                         if let Some(state) = app.try_state::<AppState>() {
-                            let intent = state.data.lock().unwrap().intent.clone();
+                            let (intent, mode) = {
+                                let d = state.data.lock().unwrap();
+                                (d.intent.clone(), d.intent_mode.clone())
+                            };
                             let _ = tx.send(intent_message(intent.as_deref()));
+                            let level = mode.as_deref().unwrap_or("off");
+                            let token = session_token(&app);
+                            let _ = tx.send(intent_mode_message(level, token, intent.as_deref(), false));
                         }
                     } else {
                         break; // refuse pre-auth traffic
@@ -328,14 +342,47 @@ fn broadcast_connected(app: &AppHandle, conns: &AtomicUsize) {
     }
 }
 
-/// The current friction config as an App→Ext `friction` message.
-pub fn friction_message() -> String {
+/// The user's distraction block list as an App→Ext `block_list` message. Carries
+/// ONLY the list, never the mode/level: the mode is owned by the extension and
+/// driven by `intent_mode` + the action popup, so editing the block list never
+/// disturbs the current Off/Nudge/Block setting (V1.md §3.2).
+pub fn block_list_message() -> String {
     let cfg = read_config();
     serde_json::json!({
-        "type": "friction",
-        "payload": { "level": cfg.friction_level, "blockList": cfg.block_list },
+        "type": "block_list",
+        "payload": { "blockList": cfg.block_list },
     })
     .to_string()
+}
+
+/// The intent → mode contract message (V1.md §3.2). `level` is the mode the
+/// session's intent maps onto ("off"/"soft"/"lockin", or "off" when no intent);
+/// `token` is the current session boundary (so the extension can tell a new
+/// session from a reconnect); `intent` is the label (for change detection);
+/// `assert` is true for an explicit user pick/clear (always re-asserts) and false
+/// for a passive connect re-sync (won't clobber a manual override unchanged).
+pub fn intent_mode_message(level: &str, token: i64, intent: Option<&str>, assert: bool) -> String {
+    serde_json::json!({
+        "type": "intent_mode",
+        "payload": { "level": level, "token": token, "intent": intent, "assert": assert },
+    })
+    .to_string()
+}
+
+/// The current session boundary as a stable token. Prefers the classifier's own
+/// session-start (DB-derived, so it survives an app restart within the same
+/// session); falls back to this process's start (stable for the process) when no
+/// events exist yet. Both call sites — `set_intent` and the connect re-sync — use
+/// this, so the token only changes when the session genuinely does.
+pub(crate) fn session_token(app: &AppHandle) -> i64 {
+    if let Some(db) = app.try_state::<crate::db::Db>() {
+        if let Some(start) = crate::commands::observer::current_session_start(db.inner()) {
+            return start;
+        }
+    }
+    app.try_state::<AppState>()
+        .map(|s| s.data.lock().unwrap().session_start_ms)
+        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis())
 }
 
 /// The current reading prefs as an App→Ext `read_prefs` message. The extension

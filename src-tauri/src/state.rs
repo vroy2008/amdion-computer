@@ -31,6 +31,11 @@ pub struct AppStateData {
     // ── Front door (Step 1) ──
     /// The user's stated intent for the current session, if any.
     pub intent: Option<String>,
+    /// The mode this session's intent maps onto — "off" | "soft" | "lockin" —
+    /// pushed to the extension as the intent default (V1.md §3.2). `None` when no
+    /// intent is set (the extension then tracks only). Session state, not config.
+    #[serde(rename = "intentMode")]
+    pub intent_mode: Option<String>,
     /// Epoch millis when this Amdion session (process) started. The greeting
     /// shows time-on-computer relative to this until the sensing engine
     /// (Step 3) provides a real login time.
@@ -53,6 +58,7 @@ impl Default for AppStateData {
             sidebar_collapsed: false,
             right_sidebar_hidden: false,
             intent: None,
+            intent_mode: None,
             session_start_ms: chrono::Utc::now().timestamp_millis(),
             extension_connected: false,
         }

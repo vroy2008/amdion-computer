@@ -81,33 +81,71 @@ pub fn on_panel_summoned(app: &tauri::AppHandle) {
     let _ = app.emit("panel-summoned", serde_json::json!({ "newSession": new_session }));
 }
 
-/// Record (or clear, with `None`) the user's stated intent for this session.
+/// The 3 built-in intents and the mode each maps onto (V1.md §3.2). Used as the
+/// fallback when a preset is set without an explicit mode; a custom intent always
+/// carries its own mode (chosen in the panel).
+fn preset_mode(intent: &str) -> &'static str {
+    match intent.trim().to_lowercase().as_str() {
+        "deep work" => "lockin",
+        "communication" => "soft",
+        "exploration" => "off",
+        _ => "soft", // unknown / custom without a mode → the gentle default
+    }
+}
+
+/// Resolve the mode for an intent: the explicit `mode` when valid, else the preset
+/// mapping. `None` when there's no intent — the extension then tracks only.
+fn resolve_mode(intent: Option<&str>, mode: Option<&str>) -> Option<String> {
+    let intent = intent?;
+    if let Some(m) = mode {
+        if matches!(m, "off" | "soft" | "lockin") {
+            return Some(m.to_string());
+        }
+    }
+    Some(preset_mode(intent).to_string())
+}
+
+/// Record (or clear, with `None`) the user's stated intent — and the mode it maps
+/// onto — for this session, then push the intent → mode contract to the extension.
 #[tauri::command]
 pub fn set_intent(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     intent: Option<String>,
+    mode: Option<String>,
 ) -> Result<AppStateData, String> {
     let cleaned = intent.filter(|i| !i.trim().is_empty());
+    let resolved = resolve_mode(cleaned.as_deref(), mode.as_deref());
     {
         let mut s = state.data.lock().unwrap();
         s.intent = cleaned.clone();
+        s.intent_mode = resolved.clone();
     }
     // Log a real, jotted intent to the on-device record — the longitudinal "what
     // I set out to do" trail for Reflect and the future agent. Clearing the
     // intent (`None`) isn't an event; only a set one is.
     if let Some(text) = cleaned.as_deref() {
         if let Some(db) = app.try_state::<crate::db::Db>() {
-            let meta = serde_json::json!({ "intent": text }).to_string();
+            let meta = serde_json::json!({ "intent": text, "mode": resolved.as_deref() }).to_string();
             db.insert_event("session_intent", "app", None, None, Some(&meta));
         }
     }
-    // Push the intent to the extension so in-page nudge copy can adapt
-    // ("You're here for X — is HOST part of that?"). Clearing it (`None`) sends a
-    // null so the extension drops the adaptive copy. No-op if nothing's connected.
+    // Push to the extension: the `intent` copy (so in-page nudge copy can adapt —
+    // "You're here for X — is HOST part of that?") and the `intent_mode` contract.
+    // A pick/clear is an explicit user action, so it ALWAYS re-asserts the intent
+    // default, clearing any manual override (assert:true). No-op if nothing's
+    // connected.
     let _ = state
         .bridge_tx
         .send(crate::bridge_ws::intent_message(cleaned.as_deref()));
+    let level = resolved.as_deref().unwrap_or("off");
+    let token = crate::bridge_ws::session_token(&app);
+    let _ = state.bridge_tx.send(crate::bridge_ws::intent_mode_message(
+        level,
+        token,
+        cleaned.as_deref(),
+        true,
+    ));
     Ok(emit_state(&app, &state))
 }
 
