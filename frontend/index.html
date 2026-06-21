@@ -248,6 +248,12 @@
     .sess-track .blk { position: absolute; top: 0; height: 100%; background: var(--accent); }
     .sess-track .blk.open { background: var(--ok); }
     .obs-empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+    /* Export: your data, out to a file. */
+    .obs-export-hint { font-size: 12px; margin-bottom: 11px; }
+    .obs-export-btns { display: flex; gap: 8px; }
+    .obs-export-status { font-size: 12px; margin-top: 11px; line-height: 1.5; }
+    .obs-export-status.ok { color: var(--ok); }
+    .obs-export-status.err { color: #e06c6c; }
 
     /* Home: the collapsed Mac-tweaks disclosure, surfaced from the panel itself. */
     .home-tweaks { margin-top: 24px; }
@@ -346,6 +352,15 @@
       <div class="section">
         <h3>Sessions</h3>
         <div id="obs-sessions"></div>
+      </div>
+      <div class="section">
+        <h3>Export</h3>
+        <p class="muted obs-export-hint">Your full activity log, saved to Downloads.</p>
+        <div class="obs-export-btns">
+          <button class="btn ghost small" id="export-csv">CSV</button>
+          <button class="btn ghost small" id="export-json">JSON</button>
+        </div>
+        <div id="export-status" class="obs-export-status hidden"></div>
       </div>
       <p class="muted" style="font-size:11px; line-height:1.6; margin-top:6px;">All of this stays on your device.</p>
     </div>
@@ -676,6 +691,33 @@
       await refreshObserver();
     }
 
+    // Export the full event log to a file. The backend writes it to Downloads
+    // and reveals it in Finder, which blurs (and so auto-hides) the panel — the
+    // status line is still set, for the next time the panel is opened.
+    let exporting = false;
+    async function exportLog(format) {
+      if (exporting) return;
+      exporting = true;
+      const status = $('export-status');
+      const btns = [$('export-csv'), $('export-json')];
+      btns.forEach(b => { if (b) b.disabled = true; });
+      if (status) { status.className = 'obs-export-status'; status.textContent = `Exporting ${format.toUpperCase()}…`; }
+      try {
+        const res = await api.exportLog(format);
+        const name = (res.path || '').split('/').pop() || res.path;
+        const n = res.eventCount;
+        if (status) {
+          status.classList.add('ok');
+          status.textContent = `Saved ${name} · ${n} event${n === 1 ? '' : 's'} · revealed in Finder`;
+        }
+      } catch (e) {
+        if (status) { status.classList.add('err'); status.textContent = `Export failed: ${esc((e && e.message) || e)}`; }
+      } finally {
+        exporting = false;
+        btns.forEach(b => { if (b) b.disabled = false; });
+      }
+    }
+
     // ── Shared: segmented control (used by the intent custom-mode form) ──
     function setSeg(segEl, value) {
       segEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === value));
@@ -720,6 +762,8 @@
     function wireEvents() {
       $('btn-observer').onclick = openObserver;
       $('observer-close').onclick = () => $('observer').classList.add('hidden');
+      $('export-csv').onclick = () => exportLog('csv');
+      $('export-json').onclick = () => exportLog('json');
 
       // Mac tweaks: load the featured list the first time the Home disclosure opens.
       $('home-tweaks-details').addEventListener('toggle', async (e) => {

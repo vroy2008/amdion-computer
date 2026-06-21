@@ -262,6 +262,163 @@ fn domain_of(u: &str) -> Option<String> {
     Some(host.strip_prefix("www.").unwrap_or(host).to_lowercase())
 }
 
+// ── Log export (V1.md §2.3) ──────────────────────────────────────────────
+//
+// "It's your data": the whole `events` log — the merged OS-sensing ∪ browser
+// track plus the session/intent markers — written to a file the user keeps. CSV
+// for spreadsheets, JSON (with `meta` re-nested) for tooling. We write to
+// ~/Downloads and reveal in Finder rather than opening a native save dialog: the
+// panel auto-hides on focus loss (lib.rs), so a modal would dismiss it, and a
+// Finder reveal is the clearer "here's your file" anyway.
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    /// Absolute path of the written file (shown to the user; asserted in tests).
+    pub path: String,
+    pub event_count: usize,
+    pub format: String,
+}
+
+/// Every event, oldest first — the full log, unbounded by day (export is "all
+/// of it"). Same degrade-to-empty contract as `load_events`.
+fn load_all_events(db: &Db) -> Vec<Event> {
+    let Ok(conn) = db.0.lock() else { return Vec::new() };
+    let Ok(mut stmt) =
+        conn.prepare("SELECT ts, kind, source, app, url, meta FROM events ORDER BY ts, id")
+    else {
+        return Vec::new();
+    };
+    let rows = stmt.query_map([], |r| {
+        Ok(Event {
+            ts: r.get(0)?,
+            kind: r.get(1)?,
+            source: r.get(2)?,
+            app: r.get(3)?,
+            url: r.get(4)?,
+            meta: r.get(5)?,
+        })
+    });
+    match rows {
+        Ok(it) => it.filter_map(Result::ok).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// `~/Downloads` when it exists, else the app-data dir (always present) so an
+/// export never silently fails for want of a destination.
+fn downloads_dir() -> std::path::PathBuf {
+    std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .map(|h| h.join("Downloads"))
+        .filter(|p| p.is_dir())
+        .unwrap_or_else(crate::config::app_data_dir)
+}
+
+/// Local ISO-8601 for an epoch-millis timestamp — a human-readable companion to
+/// the raw `ts`. Empty string if the value is out of range.
+fn iso_local(ts_ms: i64) -> String {
+    Local
+        .timestamp_millis_opt(ts_ms)
+        .single()
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_default()
+}
+
+/// RFC-4180 field: quote when it contains a comma, quote, CR or LF; double any
+/// inner quotes.
+fn csv_field(s: &str) -> String {
+    if s.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+/// The event log as CSV: one header row + one row per event. `meta` is kept as
+/// its raw JSON string, escaped as a single field.
+fn to_csv(events: &[Event]) -> String {
+    let mut out = String::from("ts,time,kind,source,app,url,meta\n");
+    for e in events {
+        let cols = [
+            e.ts.to_string(),
+            iso_local(e.ts),
+            e.kind.clone(),
+            e.source.clone(),
+            e.app.clone().unwrap_or_default(),
+            e.url.clone().unwrap_or_default(),
+            e.meta.clone().unwrap_or_default(),
+        ];
+        let line: Vec<String> = cols.iter().map(|c| csv_field(c)).collect();
+        out.push_str(&line.join(","));
+        out.push('\n');
+    }
+    out
+}
+
+/// The event log as a pretty JSON document. `meta` is re-parsed into nested JSON
+/// when it's valid (so consumers don't double-decode), else `null`.
+fn to_json(events: &[Event], exported_at_ms: i64) -> String {
+    let arr: Vec<serde_json::Value> = events
+        .iter()
+        .map(|e| {
+            let meta = e
+                .meta
+                .as_deref()
+                .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+                .unwrap_or(serde_json::Value::Null);
+            serde_json::json!({
+                "ts": e.ts,
+                "time": iso_local(e.ts),
+                "kind": e.kind,
+                "source": e.source,
+                "app": e.app,
+                "url": e.url,
+                "meta": meta,
+            })
+        })
+        .collect();
+    let doc = serde_json::json!({
+        "app": "Amdion",
+        "exportedAt": iso_local(exported_at_ms),
+        "eventCount": events.len(),
+        "events": arr,
+    });
+    serde_json::to_string_pretty(&doc).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Write the full event log to `~/Downloads/amdion-log-<stamp>.<fmt>` and reveal
+/// it in Finder. `format` is `"csv"` or `"json"`.
+#[tauri::command]
+pub fn export_log(db: tauri::State<'_, Db>, format: String) -> Result<ExportResult, String> {
+    let fmt = format.to_lowercase();
+    if fmt != "csv" && fmt != "json" {
+        return Err(format!("unknown export format: {format}"));
+    }
+
+    let events = load_all_events(&db);
+    let contents = if fmt == "csv" {
+        to_csv(&events)
+    } else {
+        to_json(&events, chrono::Utc::now().timestamp_millis())
+    };
+
+    let filename = format!("amdion-log-{}.{fmt}", Local::now().format("%Y%m%d-%H%M%S"));
+    let path = downloads_dir().join(&filename);
+    std::fs::write(&path, contents)
+        .map_err(|e| format!("couldn't write {}: {e}", path.display()))?;
+
+    // Reveal in Finder (best-effort). This foregrounds Finder, which blurs and
+    // thus auto-hides the panel — intended: the file is the destination now.
+    let _ = std::process::Command::new("open").arg("-R").arg(&path).status();
+
+    Ok(ExportResult {
+        path: path.to_string_lossy().into_owned(),
+        event_count: events.len(),
+        format: fmt,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,5 +503,39 @@ mod tests {
         let s = summarize(&evs, 50 * MIN, "2026-06-15".into(), 5 * MIN, 30 * MIN);
         assert_eq!(s.articles_read, 1, "only the one read that ended counts");
         assert_eq!(s.reading_ms, 420 * 1000, "secondsRead → ms");
+    }
+
+    // CSV export: a header row, one row per event, and RFC-4180 escaping of any
+    // field carrying a comma or quote (meta + a comma-bearing url).
+    #[test]
+    fn csv_has_header_and_escapes_special_chars() {
+        let evs = vec![
+            ev(0, "app_focus", "os", Some("com.x"), None, Some(r#"{"name":"a, b"}"#)),
+            ev(1, "tab_navigated", "browser", None, Some("https://x.com/?a=1,2"), None),
+        ];
+        let csv = to_csv(&evs);
+        let lines: Vec<&str> = csv.lines().collect();
+        assert_eq!(lines[0], "ts,time,kind,source,app,url,meta");
+        assert_eq!(lines.len(), 3, "header + two rows");
+        // meta with a comma + quotes is wrapped and its inner quotes doubled.
+        assert!(csv.contains(r#""{""name"":""a, b""}""#), "meta escaped: {csv}");
+        // a url containing a comma is quoted as a single field.
+        assert!(csv.contains("\"https://x.com/?a=1,2\""), "url quoted: {csv}");
+    }
+
+    // JSON export: the envelope counts, and `meta` comes back as nested JSON
+    // (not a string) when valid, or `null` when absent.
+    #[test]
+    fn json_renests_meta_and_counts() {
+        let evs = vec![
+            ev(0, "session_intent", "browser", None, None, Some(r#"{"intent":"Deep work"}"#)),
+            ev(1, "active", "os", None, None, None),
+        ];
+        let v: serde_json::Value = serde_json::from_str(&to_json(&evs, 1000)).unwrap();
+        assert_eq!(v["app"], "Amdion");
+        assert_eq!(v["eventCount"], 2);
+        assert_eq!(v["events"].as_array().unwrap().len(), 2);
+        assert_eq!(v["events"][0]["meta"]["intent"], "Deep work", "meta re-nested");
+        assert!(v["events"][1]["meta"].is_null(), "absent meta → null");
     }
 }

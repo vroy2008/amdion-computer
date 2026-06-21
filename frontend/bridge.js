@@ -43,6 +43,8 @@ if (window.__TAURI__) {
     // ── Observer (Step 3): daily stats over the local event store ──
     getDailySummary: (date) => invoke('get_daily_summary', { date: date || null }),
     getSessions: (date) => invoke('get_sessions', { date: date || null }),
+    // Write the full event log to ~/Downloads and reveal it; format = 'csv'|'json'.
+    exportLog: (format) => invoke('export_log', { format }),
     onSensingUpdate: (cb) => listen('sensing-update', (e) => cb(e.payload)),
 
     // ── Mac tuning ──
