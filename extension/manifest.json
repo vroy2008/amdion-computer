@@ -14,7 +14,7 @@
     "declarativeNetRequest"
   ],
   "host_permissions": ["<all_urls>"],
-  "background": { "service_worker": "background.js" },
+  "background": { "service_worker": "core/background.js" },
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -43,25 +43,25 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/reshape.js"],
+      "js": ["features/reshape/reshape.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["content/nudge.js"],
+      "js": ["core/nudge.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["content/capture.js"],
+      "js": ["features/notes/capture.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["<all_urls>"],
       "js": [
-        "content/vendor/readability.js",
-        "content/vendor/readability-readerable.js",
-        "content/reader.js"
+        "features/read-mode/vendor/readability.js",
+        "features/read-mode/vendor/readability-readerable.js",
+        "features/read-mode/reader.js"
       ],
       "run_at": "document_idle"
     },
@@ -71,12 +71,12 @@
         "*://*.twitter.com/*",
         "*://*.linkedin.com/*"
       ],
-      "js": ["content/feedfade.js"],
+      "js": ["features/reshape/feedfade.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["*://*.youtube.com/*"],
-      "js": ["content/ytdrift.js"],
+      "js": ["features/reshape/ytdrift.js"],
       "run_at": "document_idle"
     },
     {
@@ -87,7 +87,7 @@
         "*://*.linkedin.com/*",
         "*://*.instagram.com/*"
       ],
-      "css": ["content/declutter.css"],
+      "css": ["features/reshape/declutter.css"],
       "run_at": "document_start"
     }
   ],
