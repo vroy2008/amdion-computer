@@ -6,7 +6,7 @@
 
 import { onBridge } from '../../core/bridge.js';
 import { hostOf, onDistraction, BUILTIN_DISTRACTIONS } from '../../core/block.js';
-import { registerFeature } from '../../core/registry.js';
+import { registerFeature, isEnabled } from '../../core/registry.js';
 
 // Default-on for known trap sites via an opt-out list; the aggressive feed-hiding
 // items default off. Seeded on install so content scripts have it before connect.
@@ -79,9 +79,16 @@ async function maybeIdleReturnNudge() {
   sendNudge(tab.id, 'idle-return');
 }
 
-onBridge('reshape', applyReshape);
+onBridge('reshape', (p) => { if (isEnabled('reshape')) applyReshape(p); });
 registerFeature({
   name: 'reshape',
   defaults: { reshape: DEFAULT_RESHAPE },
   hooks: { onNavCommitted: maybeRedirectNudge, onActiveFromIdle: maybeIdleReturnNudge },
+  contentScripts: [
+    { id: 'reshape', matches: ['<all_urls>'], js: ['features/reshape/reshape.js'], runAt: 'document_start' },
+    { id: 'reshape-nudge-triggers', matches: ['<all_urls>'], js: ['features/reshape/nudge-triggers.js'], runAt: 'document_idle' },
+    { id: 'reshape-feedfade', matches: ['*://*.x.com/*', '*://*.twitter.com/*', '*://*.linkedin.com/*'], js: ['features/reshape/feedfade.js'], runAt: 'document_idle' },
+    { id: 'reshape-ytdrift', matches: ['*://*.youtube.com/*'], js: ['features/reshape/ytdrift.js'], runAt: 'document_idle' },
+    { id: 'reshape-declutter', matches: ['*://*.youtube.com/*', '*://*.x.com/*', '*://*.twitter.com/*', '*://*.linkedin.com/*', '*://*.instagram.com/*'], css: ['features/reshape/declutter.css'], runAt: 'document_start' },
+  ],
 });

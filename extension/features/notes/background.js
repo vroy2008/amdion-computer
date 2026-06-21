@@ -5,7 +5,7 @@
 // on the reliable inbound bridge path.
 
 import { send, onBridge } from '../../core/bridge.js';
-import { registerFeature } from '../../core/registry.js';
+import { registerFeature, isEnabled } from '../../core/registry.js';
 
 function captureActiveTab() {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -29,15 +29,20 @@ function flashBadge() {
   } catch (_) {}
 }
 
-onBridge('capture_tab', captureActiveTab);
+// Proactive capture is gated on the feature flag (dormant by default): the app
+// push and the ⌃⇧C hotkey both no-op until Notes is unlocked.
+onBridge('capture_tab', () => { if (isEnabled('notes')) captureActiveTab(); });
 
 // The ⌃⇧C hotkey fires in the worker; capture the active tab.
 chrome.commands.onCommand.addListener((command) => {
-  if (command === 'capture-tab') captureActiveTab();
+  if (command === 'capture-tab' && isEnabled('notes')) captureActiveTab();
 });
 
-// content/capture.js → app: a highlight (selected quote) or typed note from a
-// normal web page. Relay it over the bridge as note_captured.
+// amdion-capture → app (note_captured). KEPT ALWAYS-ON even when the Notes feature
+// is dormant: the core nudge's "Park it" (core/nudge.js) relies on this relay to
+// file a page, and the app persists it (bridge_ws.rs → insert_note). The proactive
+// capture surface (the ⌃⇧C hotkey above + features/notes/capture.js) is what's
+// gated; this thin inbound relay is core Park-it plumbing.
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === 'amdion-capture') {
     send({ type: 'note_captured', payload: msg.payload || {} });
@@ -45,4 +50,9 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
-registerFeature({ name: 'notes' });
+registerFeature({
+  name: 'notes',
+  contentScripts: [
+    { id: 'notes-capture', matches: ['<all_urls>'], js: ['features/notes/capture.js'], runAt: 'document_idle' },
+  ],
+});

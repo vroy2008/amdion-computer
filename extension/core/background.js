@@ -8,7 +8,7 @@
 
 import { connect, send, isConnected, onBridge } from './bridge.js';
 import { BUILTIN_DISTRACTIONS, refreshBlocking, applyManualMode } from './block.js';
-import { dispatch, featureDefaults, setEnabledMap } from './registry.js';
+import { dispatch, featureDefaults, setEnabledMap, enabledContentScripts } from './registry.js';
 
 // Feature modules — importing them runs their top-level self-registration. Each
 // is acyclic: features import from core/, never the reverse.
@@ -18,13 +18,43 @@ import '../features/notes/background.js';
 import '../features/present/background.js';
 
 // ── Feature enable-gate: mirror chrome.storage.local 'features' → registry ────
-// Absent ⇒ every feature enabled (today's default). Live-updates if the app
-// later flips one dormant. Not a top-level await, so listeners below still
-// register synchronously on worker startup (MV3 wake requirement).
-chrome.storage.local.get(['features']).then((r) => setEnabledMap(r.features || {}));
+// Absent ⇒ every bonus feature DORMANT (V1 default). Live-updates if the app
+// later unlocks one. Not a top-level await, so listeners below still register
+// synchronously on worker startup (MV3 wake requirement).
+chrome.storage.local.get(['features']).then((r) => { setEnabledMap(r.features || {}); syncContentScripts(); });
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.features) setEnabledMap(changes.features.newValue || {});
+  if (area === 'local' && changes.features) { setEnabledMap(changes.features.newValue || {}); syncContentScripts(); }
 });
+
+// Register only the content scripts the ENABLED features want, reconciled against
+// the live registration set so unlocking/locking a feature adds/removes its
+// scripts. Dormant features inject nothing — no per-page cost. chrome.scripting
+// registrations persist across sessions AND extension updates, so we reconcile by
+// CONTENT, not just id: an id whose matches/js/css/runAt changed is dropped and
+// re-added (else a shipped spec change wouldn't take effect), and a since-locked
+// feature's scripts are dropped — self-healing on every worker startup. Calls are
+// serialized so rapid unlock/lock toggles can't interleave onto the wrong state.
+let csSyncChain = Promise.resolve();
+function syncContentScripts() {
+  csSyncChain = csSyncChain.then(runContentScriptSync).catch((e) => console.warn('[amdion] content-script sync failed:', e));
+  return csSyncChain;
+}
+const csSig = (s) => JSON.stringify({ m: s.matches || [], js: s.js || [], css: s.css || [], r: s.runAt || 'document_idle' });
+async function runContentScriptSync() {
+  if (!chrome.scripting || !chrome.scripting.registerContentScripts) return;
+  const want = enabledContentScripts();
+  const wantById = new Map(want.map((s) => [s.id, s]));
+  let existing = [];
+  try { existing = await chrome.scripting.getRegisteredContentScripts(); } catch (_) {}
+  const existById = new Map(existing.map((s) => [s.id, s]));
+  // Drop ids no longer wanted OR whose spec changed; (re-)add new ids + changed specs.
+  const toRemove = existing.filter((s) => !wantById.has(s.id) || csSig(s) !== csSig(wantById.get(s.id))).map((s) => s.id);
+  const toAdd = want.filter((s) => !existById.has(s.id) || csSig(existById.get(s.id)) !== csSig(s));
+  try { if (toRemove.length) await chrome.scripting.unregisterContentScripts({ ids: toRemove }); }
+  catch (e) { console.warn('[amdion] unregister content scripts failed:', e); }
+  try { if (toAdd.length) await chrome.scripting.registerContentScripts(toAdd); }
+  catch (e) { console.warn('[amdion] register content scripts failed:', e); }
+}
 
 // ── Core App→Ext handlers: tab control + intent ──────────────────────────────
 

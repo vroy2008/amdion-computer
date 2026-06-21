@@ -11,6 +11,7 @@
     "idle",
     "storage",
     "alarms",
+    "scripting",
     "declarativeNetRequest"
   ],
   "host_permissions": ["<all_urls>"],
@@ -44,57 +45,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["features/reshape/reshape.js"],
-      "run_at": "document_start"
-    },
-    {
-      "matches": ["<all_urls>"],
       "js": ["core/nudge.js"],
       "run_at": "document_idle"
-    },
-    {
-      "matches": ["<all_urls>"],
-      "js": ["features/reshape/nudge-triggers.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["<all_urls>"],
-      "js": ["features/notes/capture.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["<all_urls>"],
-      "js": [
-        "features/read-mode/vendor/readability.js",
-        "features/read-mode/vendor/readability-readerable.js",
-        "features/read-mode/reader.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "*://*.x.com/*",
-        "*://*.twitter.com/*",
-        "*://*.linkedin.com/*"
-      ],
-      "js": ["features/reshape/feedfade.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["*://*.youtube.com/*"],
-      "js": ["features/reshape/ytdrift.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "*://*.youtube.com/*",
-        "*://*.x.com/*",
-        "*://*.twitter.com/*",
-        "*://*.linkedin.com/*",
-        "*://*.instagram.com/*"
-      ],
-      "css": ["features/reshape/declutter.css"],
-      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

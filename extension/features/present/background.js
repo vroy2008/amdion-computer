@@ -4,7 +4,7 @@
 
 import { onBridge } from '../../core/bridge.js';
 import { setReadingLock } from '../../core/block.js';
-import { registerFeature } from '../../core/registry.js';
+import { registerFeature, isEnabled } from '../../core/registry.js';
 
 async function applyPresent(payload) {
   const on = payload.on !== false;
@@ -16,12 +16,17 @@ async function applyPresent(payload) {
   await setReadingLock(on);
 }
 
-onBridge('present_mode', applyPresent);
+// Gated on the feature flag (dormant by default): present_mode fullscreens the
+// window from the worker (no content script needed), so it must check the flag.
+onBridge('present_mode', (p) => { if (isEnabled('present')) applyPresent(p); });
 
 // content/reader.js → the in-page "Present" offer: enter Present (fullscreen + the
-// wrap) once a long task has settled. Same action present_mode drives.
+// wrap) once a long task has settled. Same action present_mode drives. NOTE: the
+// sole sender (features/read-mode/reader.js) is read-mode's content script, so this
+// in-page offer only surfaces when read-mode is ALSO unlocked; present_mode over
+// the bridge works with present alone.
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.type === 'amdion-present') applyPresent({ on: true });
+  if (msg && msg.type === 'amdion-present' && isEnabled('present')) applyPresent({ on: true });
 });
 
 registerFeature({ name: 'present' });

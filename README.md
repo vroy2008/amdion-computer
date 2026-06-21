@@ -84,14 +84,12 @@ The remaining V1 gates are a **real-Chrome end-to-end smoke test** of the three 
 
 ### Beyond V1 (also in the repo)
 
-The repo carries a **bonus shelf** — Read Mode (an in-page reader, `⌃⇧R`), Notes/Capture (`⌃⇧C`), Present, and a page-reshaping layer (declutter / feed-fade / drift nudges) — plus a **deferred assistant**. None of these are part of the V1 spine, and the extension is laid out to isolate them (`core/` + a `features/` registry) so they can be edited without touching core.
-
-> **Heads-up:** the default-*off* unlock gate is not wired yet. The feature registry exists but currently defaults every feature *on* ([`extension/core/registry.js`](extension/core/registry.js) — `isEnabled` returns true when a flag is absent), and the feature content scripts are registered active in the manifest. So a freshly loaded extension **also runs these behaviors** (declutter on distraction sites, the in-page Read pill, the `⌃⇧R` / `⌃⇧C` hotkeys). Gating them dormant by default is a planned follow-up; V1's *intended* surface is just Sense + Off/Nudge/Block.
+The repo carries a **bonus shelf** — Read Mode (an in-page reader, `⌃⇧R`), Notes/Capture (`⌃⇧C`), Present, and a page-reshaping layer (declutter / feed-fade / drift nudges) — plus a **deferred assistant**. None of these are part of the V1 spine. They live under `extension/features/` behind a feature registry and are **dormant by default**: a fresh install runs only Sense + Off/Nudge/Block. A feature's code — worker hooks *and* content scripts — loads only when it's explicitly unlocked (the extension registers a feature's content scripts via `chrome.scripting` only while its flag is on; see [`extension/core/registry.js`](extension/core/registry.js)). The per-feature unlock onboarding is a planned follow-up.
 
 ## Architecture
 
 - **Tauri v2** — Rust backend: native menu-bar window, macOS idle/active/screen sensing, a SQLite event store, and the localhost WebSocket bridge.
-- **Chrome extension (MV3)** — `core/` (bridge, activity track, nudge, block) talks to the app over a **localhost WebSocket**. Bonus modules live under `features/` behind a registry-based enable map — which today defaults *on*, so they currently run as well (see *Beyond V1*).
+- **Chrome extension (MV3)** — `core/` (bridge, activity track, nudge, block) talks to the app over a **localhost WebSocket**. Bonus modules live under `features/` behind a registry enable map that defaults **off**; an enabled feature's content scripts are registered dynamically via `chrome.scripting`, so dormant features run no code (see *Beyond V1*).
 - **Vanilla frontend** — HTML/CSS/JS for the front door, intent, and Observer UI, via a small `bridge.js` adapter.
 
 ## Project structure
@@ -102,6 +100,12 @@ frontend/    # Front door + Observer UI, bridge.js adapter
 extension/   # Chrome MV3 extension — core/ (track, nudge, block) + features/ (bonus)
 docs/        # V1 scope, ROADMAP, DEPLOYMENT, DEV loop, product concept
 ```
+
+## License
+
+Amdion is released under the [MIT License](LICENSE) — © 2026 AMDION. Third-party components are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md); notably, Read Mode bundles Mozilla's [Readability](https://github.com/mozilla/readability) (Apache-2.0), and the app is built on [Tauri](https://tauri.app) (MIT/Apache-2.0).
+
+The **AMDION** name, the amdion.org identity, and the logo are brand assets of the author — the MIT grant covers the code, not the brand. Forks should rebrand.
 
 ---
 

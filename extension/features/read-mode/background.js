@@ -6,7 +6,7 @@
 
 import { send, onBridge } from '../../core/bridge.js';
 import { setReadingLock } from '../../core/block.js';
-import { registerFeature } from '../../core/registry.js';
+import { registerFeature, isEnabled } from '../../core/registry.js';
 
 function applyReadMode(payload) {
   const enter = payload.on !== false;
@@ -45,23 +45,38 @@ async function applyReadingWrap(started) {
   await setReadingLock(true);
 }
 
-onBridge('read_mode', applyReadMode);
-onBridge('read_prefs', applyReadPrefs);
+// All read-mode entry points are gated on the feature flag — dormant by default.
+onBridge('read_mode', (p) => { if (isEnabled('read-mode')) applyReadMode(p); });
+onBridge('read_prefs', (p) => { if (isEnabled('read-mode')) applyReadPrefs(p); });
 
 // The ⌃⇧R hotkey fires in the worker; relay it to whatever tab is in front.
 chrome.commands.onCommand.addListener((command) => {
-  if (command === 'toggle-read-mode') withActiveTab((id) => sendToTab(id, 'amdion-read-enter'));
+  if (command === 'toggle-read-mode' && isEnabled('read-mode')) withActiveTab((id) => sendToTab(id, 'amdion-read-enter'));
 });
 
 // content/reader.js → app + local wrap: forward read_started/read_ended over the
 // bridge (the app logs reading time + runs an optional Focus Shortcut) and apply
 // the lock-distractions half of the wrap right here.
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.type === 'amdion-read-event') {
+  if (msg && msg.type === 'amdion-read-event' && isEnabled('read-mode')) {
     const started = msg.event === 'started';
     send({ type: started ? 'read_started' : 'read_ended', payload: msg.payload || {} });
     applyReadingWrap(started);
   }
 });
 
-registerFeature({ name: 'read-mode' });
+registerFeature({
+  name: 'read-mode',
+  contentScripts: [
+    {
+      id: 'read-mode-reader',
+      matches: ['<all_urls>'],
+      js: [
+        'features/read-mode/vendor/readability.js',
+        'features/read-mode/vendor/readability-readerable.js',
+        'features/read-mode/reader.js',
+      ],
+      runAt: 'document_idle',
+    },
+  ],
+});
