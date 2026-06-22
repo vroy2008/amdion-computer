@@ -14,3 +14,7 @@ src-tauri/target/
 # Dead pre-pivot artifact: the app reads its config from the app-data dir, not
 # the repo root. Ignored so the personal copy can't be re-committed.
 config.json
+
+# Personal cross-session working log — private, not for the public repo.
+# Lives on disk for local use; the durable record is the ~/.claude memory.
+STATUS.md
