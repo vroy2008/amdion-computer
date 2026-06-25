@@ -1,6 +1,6 @@
 # Amdion — Roadmap & Technical Plan
 
-> **Source of truth.** This doc supersedes the technical sections of [focused_computer.md](focused_computer.md) (which remains the product/philosophy concept). For the concrete build steps, see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> **Source of truth.** This is the vision & architecture document for Amdion.
 >
 > **Current scope & status** live in the [README](../README.md) and [docs/V1.md](V1.md). This is a vision/architecture document: the dated "Current status" notes below are historical (written pre-V1-build) and do not reflect what's shipped today — trust the README for that. Friction modes were also renamed since this was written (Off / Soft / Lock-In → **Off / Nudge / Block**).
 >
@@ -137,7 +137,7 @@ Not implemented in v1, but every layer above exposes a clean, typed data + actio
 | **CUT** Electron stack | `main.js`, `preload.js`, `gemini.js`, root `index.html`, `observer-mvp/` to be removed once Tauri reaches parity. |
 | **CUT** screenshot-based journaling | Replaced by deterministic event logging (extension + OS idle/active). |
 | **CUT** 10-step vision agent | The autonomous click/type/scroll agent is gone; agent becomes a deferred NL+actions layer. |
-| **KEEP** four pillars + philosophy | From [focused_computer.md](focused_computer.md) — still valid. |
+| **KEEP** four pillars + philosophy | The original product concept — still valid. |
 | **KEEP** Gemini chat, voice transcription, global hotkey, favorites, config | Foundation carries over to the new shape. |
 | **ADD** Setup & tuning layer | New first-run pillar. |
 | **ADD** sensing ontology + SQLite | New foundation. |

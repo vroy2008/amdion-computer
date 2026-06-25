@@ -1,5 +1,5 @@
 // Amdion YouTube drift counter — catch the video→suggested→suggested rabbit
-// hole without touching legitimate viewing (docs/REORIENTATION.md §6).
+// hole without touching legitimate viewing.
 //
 // YouTube is a single-page app: watch→watch hops don't reload the page and don't
 // fire webNavigation.onCommitted, so this can't live in the background worker. We

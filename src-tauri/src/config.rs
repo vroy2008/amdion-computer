@@ -48,7 +48,7 @@ pub struct AppConfig {
     // ── Reshape (Phase 2) ──
     /// Per-site "calm the trap" reshaping — declutter + feed-fade + the in-page
     /// behavioral nudges. A switch independent of the friction level: a site can
-    /// be calmed even in Off mode (see docs/REORIENTATION.md §9). Mirrored to the
+    /// be calmed even in Off mode. Mirrored to the
     /// extension's chrome.storage.local "reshape".
     #[serde(default)]
     pub reshape: ReshapeConfig,
@@ -94,7 +94,7 @@ pub struct ReadingPrefs {
     pub pill_enabled: bool,
     /// Offer a one-tap "Present" (fullscreen + the wrap) on long non-article
     /// pages once reading/work has visibly settled. Opt-in; default OFF — the
-    /// offer is ambient but never auto-engages (see docs/REORIENTATION.md §9).
+    /// offer is ambient but never auto-engages.
     #[serde(rename = "presentOffer", default)]
     pub present_offer: bool,
     /// "The wrap": block your distraction sites in Chrome for the duration of a
@@ -136,7 +136,7 @@ pub struct ReshapeConfig {
     #[serde(rename = "disabledSites", default)]
     pub disabled_sites: Vec<String>,
     /// Feed-fade: opacity-fade the bottomless feed past the fold (X / LinkedIn).
-    /// Experiment-tier; default OFF (aggressive feed-hiding is opt-in, §6).
+    /// Experiment-tier; default OFF (aggressive feed-hiding is opt-in).
     #[serde(rename = "feedFade", default)]
     pub feed_fade: bool,
     /// Hide the YouTube algorithmic home grid (search / Subscriptions stay).

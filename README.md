@@ -80,7 +80,7 @@ The extension's toolbar popup shows **Connected** once it links to the app over 
 
 The remaining V1 gates are a **real-Chrome end-to-end smoke test** of the three modes and intent switching (the dev environment can't run an MV3 service worker), and packaging polish. **Distribution is app-first / build-from-source** for now — the audience is developers and early adopters. The **demand-phase upgrade** is a one-click path: an Apple Developer signed + notarized DMG with an auto-updater, and the extension on the Chrome Web Store.
 
-> Detailed running log: [STATUS.md](STATUS.md) · the V1 scope-of-truth: [docs/V1.md](docs/V1.md) · vision & architecture: [docs/ROADMAP.md](docs/ROADMAP.md) · distribution: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · dev loop: [docs/DEV.md](docs/DEV.md).
+> The V1 scope-of-truth: [docs/V1.md](docs/V1.md) · vision & architecture: [docs/ROADMAP.md](docs/ROADMAP.md) · distribution: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) · dev loop: [docs/DEV.md](docs/DEV.md).
 
 ### Beyond V1 (also in the repo)
 
@@ -98,7 +98,7 @@ The repo carries a **bonus shelf** — Read Mode (an in-page reader, `⌃⇧R`),
 src-tauri/   # Tauri v2 Rust backend (app, sensing, db, bridge, commands)
 frontend/    # Front door + Observer UI, bridge.js adapter
 extension/   # Chrome MV3 extension — core/ (track, nudge, block) + features/ (bonus)
-docs/        # V1 scope, ROADMAP, DEPLOYMENT, DEV loop, product concept
+docs/        # V1 scope, ROADMAP, DEPLOYMENT, DEV loop
 ```
 
 ## License

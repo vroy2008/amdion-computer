@@ -9,7 +9,7 @@
 // - `walkthrough` tweaks can't be set safely from the CLI; Amdion opens the
 //   relevant System Settings pane and shows the steps (overlay-and-point).
 //
-// See docs/IMPLEMENTATION_PLAN.md → Step 1.
+// Part of the first-run "Tune your Mac" layer.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -1,5 +1,5 @@
 // Amdion feed-fade — dim the bottomless feed past the fold so skimming forever
-// takes a deliberate choice, not zero friction (docs/REORIENTATION.md §6).
+// takes a deliberate choice, not zero friction.
 //
 // EXPERIMENT-TIER, DEFAULT OFF. Opacity-only (no grayscale); the first items you
 // see stay sharp, items past the fold dim; an explicit CLICK restores one (never

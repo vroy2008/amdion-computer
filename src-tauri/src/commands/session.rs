@@ -67,7 +67,7 @@ pub fn retreat_window(win: &tauri::WebviewWindow) {
 ///
 /// Permissionless and quiet: the boundary is derived from the sensing already
 /// running and the summon is an arrival the user makes themselves — no popup, no
-/// notification, no new permission (see docs/REORIENTATION.md §2).
+/// notification, no new permission.
 pub fn on_panel_summoned(app: &tauri::AppHandle) {
     let Some(db) = app.try_state::<crate::db::Db>() else {
         return;

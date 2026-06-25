@@ -21,7 +21,7 @@ dev` no longer kills it (see *Dev and release are isolated*, below).
 After editing anything under `extension/`:
 
 1. `chrome://extensions` → click the **↻ Reload** icon on the Amdion card.
-2. For **content-script** edits (`content/*.js` — capture, reader, nudge), also
+2. For **content-script** edits (under `core/` and `features/*/` — nudge, reader, capture), also
    **refresh the test tab** — already-injected tabs keep running old code until reloaded.
 
 That's it. **Remove + Load unpacked is only needed if you change the manifest's

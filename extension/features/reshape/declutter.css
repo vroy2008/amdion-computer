@@ -5,7 +5,7 @@
 
    GATE: every rule is scoped under `html.amdion-reshape`, the class
    content/reshape.js adds when this site is reshaped (per-site, default-on for
-   the distraction set — see docs/REORIENTATION.md §9). So declutter is now
+   the distraction set). So declutter is now
    toggle-governed instead of always-on, with no regression for its current
    domains. The opt-in YouTube home grid is additionally gated on
    `html.amdion-yt-home`. */
@@ -22,7 +22,7 @@ html.amdion-reshape ytd-mini-guide-entry-renderer[aria-label="Shorts"] {
    cards, the autoplay rabbit-hole. The video, description, channel, search, and
    Subscriptions are untouched; a playlist panel (a separate element) survives.
    NOTE: CSS hides the rail but can't stop player autoplay-at-source (a separate
-   scripted change — see REORIENTATION §6). */
+   scripted change). */
 html.amdion-reshape ytd-watch-next-secondary-results-renderer,
 html.amdion-reshape .ytp-ce-element,
 html.amdion-reshape .ytp-endscreen-content {
@@ -65,7 +65,7 @@ html.amdion-reshape .notification-badge {
    feed-of-feeds and the autoplaying short-form trap). Anchored on the route
    hrefs, which are durable on IG; DMs (/direct), home, and a person's profile
    are untouched. Reels is a motion problem opacity can't tame, so this hides the
-   entry point rather than dimming it (REORIENTATION §6). Scoped to the instagram
+   entry point rather than dimming it. Scoped to the instagram
    site class so an identically-named anchor elsewhere (e.g. X's /explore tab) is
    never touched. */
 html.amdion-reshape.amdion-site-instagram a[href="/explore/"],

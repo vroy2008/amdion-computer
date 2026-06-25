@@ -18,3 +18,13 @@ config.json
 # Personal cross-session working log — private, not for the public repo.
 # Lives on disk for local use; the durable record is the ~/.claude memory.
 STATUS.md
+
+# Internal planning / design notes — kept on disk for personal dev, not public.
+# (The durable rationale lives in the code comments and docs/V1.md + ROADMAP.md.)
+docs/REORIENTATION.md
+docs/IMPLEMENTATION_PLAN.md
+docs/focused_computer.md
+
+# Draft blocks for the SEPARATE amdion.org website repo (download button + email
+# capture). Belong in the website repo, not the public app repo. Kept on disk.
+docs/website/

@@ -1,8 +1,8 @@
 // Amdion reshape gate — the substrate every "calm the trap" item keys off.
 //
 // Reshaping (declutter + feed-fade + the behavioral nudges) is a per-site switch
-// independent of the friction level: a site can be calmed even in Off mode
-// (docs/REORIENTATION.md §9). This script runs at document_start, reads the
+// independent of the friction level: a site can be calmed even in Off mode.
+// This script runs at document_start, reads the
 // pushed config, and toggles classes on <html>:
 //
 //   html.amdion-reshape   → this host is reshaped (declutter.css keys off this)

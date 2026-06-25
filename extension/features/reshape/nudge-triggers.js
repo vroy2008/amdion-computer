@@ -1,5 +1,5 @@
 // Amdion reshape — the nudge triggers that key off the per-site *reshape* switch
-// (not the friction level), so a site can be calmed even in Off mode (§9). The
+// (not the friction level), so a site can be calmed even in Off mode. The
 // card itself and the friction-gated landing trigger are core (core/nudge.js);
 // these are the reshape-gated *behavioral* triggers, split out so core never
 // depends on the reshape feature:
