@@ -1,7 +1,17 @@
 {
   "name": "amdion-computer",
   "version": "1.0.0",
-  "description": "Amdion — a calm focus layer over your Mac",
+  "description": "Amdion — a calm attention layer for your Mac",
+  "license": "MIT",
+  "author": "AMDION",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vroy2008/amdion-computer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vroy2008/amdion-computer/issues"
+  },
+  "homepage": "https://github.com/vroy2008/amdion-computer#readme",
   "scripts": {
     "tauri": "tauri",
     "dev": "sh scripts/dev-clean.sh && tauri dev",
@@ -10,8 +20,6 @@
     "dev:reset": "sh scripts/reset-data.sh",
     "dev:reset:hard": "sh scripts/reset-hard.sh"
   },
-  "author": "AMDION",
-  "license": "MIT",
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.1"
   }
