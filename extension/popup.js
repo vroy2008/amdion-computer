@@ -53,9 +53,55 @@ segEl.querySelectorAll('button').forEach((b) => {
   };
 });
 
+// ── Calm distracting sites (reshape) ──────────────────────────────────────────
+// Owned here now, not the desktop app: the popup is the source of truth. The
+// master on/off is the feature enable-gate (chrome.storage.local 'features'.reshape)
+// — off means the reshape content scripts aren't even registered, so zero per-page
+// cost. The two sub-toggles live in the 'reshape' config the content scripts read.
+const DEFAULT_RESHAPE = { enabled: true, disabledSites: [], feedFade: false, hideYoutubeHome: false };
+const calmToggle = document.getElementById('calm-toggle');
+const calmSubs = document.getElementById('calm-subs');
+const calmFeedFade = document.getElementById('calm-feedfade');
+const calmYtHome = document.getElementById('calm-ythome');
+
+function renderCalm(features, reshape) {
+  const on = !!(features && features.reshape === true);
+  const r = reshape || DEFAULT_RESHAPE;
+  calmToggle.checked = on;
+  calmSubs.classList.toggle('hidden', !on);
+  calmFeedFade.checked = !!r.feedFade;
+  calmYtHome.checked = !!r.hideYoutubeHome;
+}
+
+function loadCalm() {
+  chrome.storage.local.get(['features', 'reshape'], (r) => renderCalm(r.features, r.reshape));
+}
+
+calmToggle.onchange = () => {
+  const on = calmToggle.checked;
+  calmSubs.classList.toggle('hidden', !on); // optimistic
+  chrome.storage.local.get(['features', 'reshape'], (r) => {
+    const features = { ...(r.features || {}), reshape: on };
+    // Turning on also asserts the in-config master switch so it actually calms
+    // sites; the sub-flags are preserved across an off→on cycle.
+    const reshape = { ...DEFAULT_RESHAPE, ...(r.reshape || {}), enabled: true };
+    chrome.storage.local.set({ features, reshape });
+  });
+};
+
+function setReshapeFlag(key, val) {
+  chrome.storage.local.get(['reshape'], (r) => {
+    const reshape = { ...DEFAULT_RESHAPE, ...(r.reshape || {}), [key]: val };
+    chrome.storage.local.set({ reshape });
+  });
+}
+calmFeedFade.onchange = () => setReshapeFlag('feedFade', calmFeedFade.checked);
+calmYtHome.onchange = () => setReshapeFlag('hideYoutubeHome', calmYtHome.checked);
+
 document.getElementById('help-link').onclick = () => {
   chrome.tabs.create({ url: chrome.runtime.getURL('walkthrough.html') });
   window.close();
 };
 
 load();
+loadCalm();

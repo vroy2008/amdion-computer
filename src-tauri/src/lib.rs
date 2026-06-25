@@ -459,6 +459,7 @@ pub fn run() {
             // Observer (Step 3): typed daily stats over the event store
             commands::observer::get_daily_summary,
             commands::observer::get_sessions,
+            commands::observer::get_current_session,
             commands::observer::export_log,
             // Mac tuning
             commands::tuning::list_mac_tweaks,

@@ -6,7 +6,7 @@
 
 import { onBridge } from '../../core/bridge.js';
 import { hostOf, onDistraction, BUILTIN_DISTRACTIONS } from '../../core/block.js';
-import { registerFeature, isEnabled } from '../../core/registry.js';
+import { registerFeature } from '../../core/registry.js';
 
 // Default-on for known trap sites via an opt-out list; the aggressive feed-hiding
 // items default off. Seeded on install so content scripts have it before connect.
@@ -79,7 +79,13 @@ async function maybeIdleReturnNudge() {
   sendNudge(tab.id, 'idle-return');
 }
 
-onBridge('reshape', (p) => { if (isEnabled('reshape')) applyReshape(p); });
+// Mirror the pushed config to storage unconditionally. Storing config for a
+// still-dormant feature is inert (its content scripts aren't registered until the
+// feature is unlocked), and doing it gate-free means the FIRST unlock finds the
+// current config already waiting rather than a stale seeded default — the enable
+// gate updates asynchronously (storage.onChanged), so it can lag a reshape push
+// arriving in the same connect/save batch as the unlock itself.
+onBridge('reshape', applyReshape);
 registerFeature({
   name: 'reshape',
   defaults: { reshape: DEFAULT_RESHAPE },

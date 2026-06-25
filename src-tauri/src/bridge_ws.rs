@@ -12,7 +12,10 @@
 //               intent { intent }, open_tab { url }, focus_tab { tabId },
 //               close_tab { tabId }, read_mode { on },
 //               read_prefs { theme, typeface, size, wpm, pillEnabled },
-//               capture_tab {}, present_mode { on }
+//               capture_tab {}, present_mode { on }, set_features { features }
+//
+// Site-calming (reshape) is owned by the extension's action popup, not the app, so
+// there is no App→Ext `reshape` message and `set_features` omits the reshape key.
 //
 // The mode (Off/Nudge/Block) is owned by the extension and driven by `intent_mode`
 // (the intent default) + the action popup (a manual override); `block_list` carries
@@ -173,9 +176,13 @@ async fn handle_conn(
                         broadcast_connected(&app, &conns);
                         // Configure the extension the instant it connects — the
                         // broadcast reaches our own freshly-subscribed `rx`.
+                        // Open the feature enable-gate for the features the panel
+                        // still manages. Site-calming (reshape) is owned by the
+                        // extension's own popup now, so the app neither pushes its
+                        // config nor asserts its enable flag (see set_features_message).
+                        let _ = tx.send(set_features_message());
                         let _ = tx.send(block_list_message());
                         let _ = tx.send(read_prefs_message());
-                        let _ = tx.send(reshape_message());
                         // The current session intent (in-memory, not config): the
                         // `intent` copy for in-page nudges, and the `intent_mode`
                         // contract re-sync. This is a passive reconnect re-sync
@@ -408,20 +415,23 @@ pub fn read_prefs_message() -> String {
     .to_string()
 }
 
-/// The current reshape config as an App→Ext `reshape` message. The extension
-/// stores the payload at chrome.storage.local "reshape"; content/reshape.js
-/// reads it and applies the `html.amdion-reshape` gate (plus the `amdion-feedfade`
-/// / `amdion-yt-home` sub-flags) every reshaping item — CSS and JS — keys off.
-pub fn reshape_message() -> String {
-    let r = read_config().reshape;
+/// The unlocked bonus-feature map as an App→Ext `set_features` message. The
+/// extension MERGES this into chrome.storage.local "features" — the fail-closed
+/// enable-gate every bonus feature keys off — rather than replacing it, so the
+/// desktop drives the features it manages while a feature the panel doesn't expose
+/// yet, flipped on by hand for dogfooding, survives a reconnect. Sent at connect
+/// and on every save_config, so the gate tracks the panel.
+///
+/// `reshape` is deliberately excluded: site-calming is owned by the extension's
+/// own action popup now (it sets `features.reshape` and the `reshape` config in
+/// storage directly), so the desktop must never assert it — omitting the key lets
+/// the extension's choice survive the merge unchanged.
+pub fn set_features_message() -> String {
+    let mut features = read_config().features;
+    features.remove("reshape");
     serde_json::json!({
-        "type": "reshape",
-        "payload": {
-            "enabled": r.enabled,
-            "disabledSites": r.disabled_sites,
-            "feedFade": r.feed_fade,
-            "hideYoutubeHome": r.hide_youtube_home,
-        },
+        "type": "set_features",
+        "payload": { "features": features },
     })
     .to_string()
 }

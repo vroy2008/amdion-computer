@@ -1,6 +1,6 @@
 // Config commands.
 
-use crate::bridge_ws::{block_list_message, read_prefs_message, reshape_message};
+use crate::bridge_ws::{block_list_message, read_prefs_message, set_features_message};
 use crate::config::{read_config, write_config, AppConfig};
 use crate::state::AppState;
 use serde::Deserialize;
@@ -31,6 +31,9 @@ pub struct ConfigUpdate {
     pub autostart: Option<bool>,
     pub reading: Option<crate::config::ReadingPrefs>,
     pub reshape: Option<crate::config::ReshapeConfig>,
+    /// Unlock/lock bonus features from the panel (keys match the extension's
+    /// feature ids, e.g. "reshape"). Mirrored to the extension's enable-gate.
+    pub features: Option<std::collections::BTreeMap<String, bool>>,
 }
 
 /// Partial update: only the fields present in `config` are changed. After
@@ -80,9 +83,12 @@ pub fn save_config(
     if let Some(reshape) = config.reshape {
         current.reshape = reshape;
     }
+    if let Some(features) = config.features {
+        current.features = features;
+    }
     write_config(&current);
+    let _ = state.bridge_tx.send(set_features_message());
     let _ = state.bridge_tx.send(block_list_message());
     let _ = state.bridge_tx.send(read_prefs_message());
-    let _ = state.bridge_tx.send(reshape_message());
     Ok(current)
 }

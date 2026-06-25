@@ -1,6 +1,7 @@
 // Config: types and JSON file persistence.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -51,6 +52,17 @@ pub struct AppConfig {
     /// extension's chrome.storage.local "reshape".
     #[serde(default)]
     pub reshape: ReshapeConfig,
+
+    // ── Bonus features (unlock shelf) ──
+    /// Which dormant bonus features the user has unlocked from the panel. The
+    /// desktop is the source of truth; this map is mirrored to the extension's
+    /// `chrome.storage.local.features` enable-gate (merged — see
+    /// `bridge_ws::set_features_message`). Absent/false ⇒ the feature stays
+    /// dormant. Keys match the extension's feature ids ("reshape", "read-mode",
+    /// "notes", "present"). Empty by default: every bonus feature starts dormant
+    /// (V1 scope), unlocked one at a time from the panel.
+    #[serde(default)]
+    pub features: BTreeMap<String, bool>,
 
     // ── Hotkeys ──
     /// Global "summon the panel" accelerator, in Tauri global-shortcut syntax
@@ -219,6 +231,7 @@ impl Default for AppConfig {
             autostart: true,
             reading: ReadingPrefs::default(),
             reshape: ReshapeConfig::default(),
+            features: BTreeMap::new(),
             summon_shortcut: default_summon_shortcut(),
         }
     }
@@ -288,5 +301,37 @@ pub fn write_config(config: &AppConfig) {
     let path = config_path();
     if let Ok(json) = serde_json::to_string_pretty(config) {
         let _ = fs::write(path, json);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn features_default_is_empty_all_dormant() {
+        // V1 scope: every bonus feature starts dormant, unlocked from the panel.
+        assert!(AppConfig::default().features.is_empty());
+    }
+
+    #[test]
+    fn features_roundtrip_preserves_unlock_map() {
+        // The extension contract: a config that unlocks reshape must survive a
+        // serialize→deserialize cycle as { "reshape": true } (the key the
+        // extension's enable-gate mirrors).
+        let mut cfg = AppConfig::default();
+        cfg.features.insert("reshape".into(), true);
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(json.contains("\"features\""));
+        let back: AppConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.features.get("reshape"), Some(&true));
+    }
+
+    #[test]
+    fn config_predating_features_defaults_to_dormant() {
+        // A config.json written before the unlock shelf existed has no `features`
+        // key; serde `default` must fill it so nothing is force-enabled on upgrade.
+        let cfg: AppConfig = serde_json::from_str(r#"{"apiKey":"","model":""}"#).unwrap();
+        assert!(cfg.features.is_empty());
     }
 }

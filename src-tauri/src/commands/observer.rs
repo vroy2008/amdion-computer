@@ -110,19 +110,60 @@ fn build_timeline(events: &[Event], now: i64) -> classify::Timeline {
     )
 }
 
-/// Start timestamp of the session the user is in right now (the most-recent
-/// session of the local day), or `None` if nothing has been sensed yet. Reuses
-/// the same classifier boundary the Observer uses — an idle gap ≥ `sessionGap`
-/// or a hard lock starts a new session — so "a new session" means exactly the
-/// same thing at the front door as it does everywhere else. Consumed by
-/// `session::on_panel_summoned`.
+/// Trailing window for "the session you're in right now": long enough to catch a
+/// session that began earlier today — or just before midnight — without scanning
+/// the whole log. A session has no break ≥ `session_gap`, so 24h comfortably
+/// contains any realistic single sitting. Unlike the day-bounded Observer reads,
+/// this is anchored to `now`, not the calendar day, so a session spanning midnight
+/// stays one session (the home counter resets on a real break, not at 00:00).
+const SESSION_LOOKBACK_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// The session in progress right now (most-recent session over the trailing
+/// window), or `None` if nothing has been sensed yet. The classifier boundary —
+/// an idle gap ≥ `sessionGap` or a hard lock starts a new session — is the same
+/// one the Observer uses, so "a new session" (e.g. arriving in the morning) means
+/// exactly the same thing at the front door as everywhere else.
+fn current_session(db: &Db) -> Option<classify::Session> {
+    let now = chrono::Utc::now().timestamp_millis();
+    let events = load_events(db, now - SESSION_LOOKBACK_MS, now + 1);
+    build_timeline(&events, now).sessions.into_iter().last()
+}
+
+/// Start timestamp of the current session. Consumed by `session::on_panel_summoned`
+/// and `bridge_ws::session_token`.
 pub(crate) fn current_session_start(db: &Db) -> Option<i64> {
-    let (_date, start, end) = day_bounds(&None);
-    let events = load_events(db, start, end);
-    build_timeline(&events, now_clamped(end))
-        .sessions
-        .last()
-        .map(|s| s.start_ts)
+    current_session(db).map(|s| s.start_ts)
+}
+
+/// Live view of the current session for the home counter: active (screen) time
+/// so far, the focus-switch count, and whether the user is active right now. This
+/// is the honest "screen time this session" — active time, reset per session —
+/// that replaces the old "computer on since login / since midnight" figure.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentSession {
+    /// Start of the session in progress (epoch ms), or `null` if nothing sensed yet.
+    pub start_ms: Option<i64>,
+    /// Active (screen) time in this session = sum of its block durations, ms.
+    pub active_ms: i64,
+    /// OS app-focus switches within this session.
+    pub switch_count: usize,
+    /// True while the trailing block is open — the user is active right now (as
+    /// opposed to on a break, when the figure is frozen).
+    pub active: bool,
+}
+
+#[tauri::command]
+pub fn get_current_session(db: tauri::State<'_, Db>) -> Result<CurrentSession, String> {
+    Ok(match current_session(&db) {
+        Some(s) => CurrentSession {
+            start_ms: Some(s.start_ts),
+            active_ms: s.active_ms,
+            switch_count: s.switch_count,
+            active: s.open,
+        },
+        None => CurrentSession { start_ms: None, active_ms: 0, switch_count: 0, active: false },
+    })
 }
 
 /// The session/block/break timeline for a day. The trailing block carries

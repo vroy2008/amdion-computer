@@ -248,9 +248,10 @@
     .obs-export-status.ok { color: var(--ok); }
     .obs-export-status.err { color: #e06c6c; }
 
-    /* Home: the collapsed Mac-tweaks disclosure, surfaced from the panel itself. */
-    .home-tweaks { margin-top: 24px; }
-    .home-tweaks > summary { font-size: 12px; color: var(--accent); }
+    /* Standardized lead paragraph under a TUNE section heading. */
+    .tune-lead { font-size: 12px; line-height: 1.6; margin-bottom: 12px; }
+    #tune-more { margin-top: 4px; }
+    #tune-more .adv-body { padding-top: 8px; }
 
     ::-webkit-scrollbar { width: 7px; }
     ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
@@ -264,6 +265,9 @@
     <div style="display:flex; gap:2px;">
       <button class="icon-btn" id="btn-observer" title="Today">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="18" y1="20" x2="18" y2="10"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-tune" title="Tune">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="10" cy="8" r="2.3" fill="var(--bg)"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.3" fill="var(--bg)"/></svg>
       </button>
     </div>
   </div>
@@ -299,14 +303,6 @@
       </div>
       <button class="btn ghost small" id="intent-clear">Clear</button>
     </div>
-
-    <!-- The 3 reversible Mac tweaks, surfaced from the panel itself (not a full
-         Settings overlay) — collapsed by default so Home stays calm. -->
-    <details class="disclosure home-tweaks" id="home-tweaks-details">
-      <summary>Tune your Mac</summary>
-      <div class="muted" style="font-size:11px; line-height:1.6; margin:8px 0 2px;">A few reversible tweaks for a quieter desktop.</div>
-      <div id="home-tweaks"></div>
-    </details>
 
     <div class="home-hint">Summon Amdion any time with <span class="summon-kbd">⌃⇧A</span> — Control + Shift + A.</div>
   </div>
@@ -348,6 +344,34 @@
     </div>
   </div>
 
+  <!-- Tune your Mac: the reversible desktop tweaks. Opened from the topbar sliders
+       icon, mirroring the Today sheet, so Home stays a calm intent+time page.
+       Site-calming used to live here too; it now lives in the Chrome extension
+       (where it acts), with just a pointer below. -->
+  <div id="tune" class="sheet hidden">
+    <div class="sheet-head">
+      <div class="title">TUNE YOUR MAC</div>
+      <button class="icon-btn" id="tune-close">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="section">
+        <h3>A quieter desktop</h3>
+        <p class="muted tune-lead">A few reversible tweaks — apply any, revert anytime.</p>
+        <div id="tune-tweaks"></div>
+        <details class="adv" id="tune-more">
+          <summary>More tweaks</summary>
+          <div class="adv-body" id="tune-tweaks-more"></div>
+        </details>
+      </div>
+      <div class="section">
+        <h3>Distracting sites</h3>
+        <p class="muted tune-lead">Calming distracting sites lives in the Amdion <b>Chrome extension</b> — click the Amdion icon in your Chrome toolbar to turn it on and tune it.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Onboarding -->
   <div id="onboarding" class="sheet hidden">
     <div class="sheet-head">
@@ -372,7 +396,7 @@
             <rect x="31" y="95" width="58" height="5" rx="2.5" fill="#163f5d"/>
           </svg>
           <div class="ob-wordmark">AMDION</div>
-          <h2 class="ob-headline">Manage your<br>attention.</h2>
+          <h2 class="ob-headline">Manage your attention.</h2>
           <p class="ob-sub">Amdion helps you see where your attention goes on this device — so you're driving, not being driven.</p>
           <div class="ob-hint"><span class="summon-kbd">⌃⇧A</span> summons it anytime</div>
         </div>
@@ -404,13 +428,13 @@
           <li>Turn on <b>Developer mode</b> (top-right)</li>
           <li>Click <b>Load unpacked</b> → choose Amdion's <code>extension</code> folder</li>
         </ol>
-        <p class="muted" style="font-size:12px; margin-top:16px;">You can skip this and connect later — from <b>Settings</b> anytime.</p>
+        <p class="muted" style="font-size:12px; margin-top:16px;">You can skip this and connect Chrome later.</p>
       </div>
 
       <!-- Step 3: done -->
       <div class="ob-step hidden" data-step="3">
         <p class="ob-welcome">You're set. <b>Amdion is now in your menu bar</b> — click the icon or press <span class="summon-kbd">⌃⇧A</span> whenever you want it.</p>
-        <p class="ob-welcome" style="margin-top:12px;">More tuning, your API key, and attention settings live behind the gear.</p>
+        <p class="ob-welcome" style="margin-top:12px;">From the panel: the sliders icon tunes your Mac, the bars icon shows your day. Site-calming lives in the Amdion Chrome extension.</p>
       </div>
     </div>
     <div class="sheet-foot">
@@ -428,31 +452,24 @@
     let config = null;
     let state = { intent: null, sessionStartMs: Date.now() };
     let tweaks = [];
-    // First sensed event of the local day (from the Observer summary). Anchors
-    // the home "time on computer" so it reflects real time today and survives
-    // app restarts, instead of resetting to this process's start. Null until
-    // the sensing engine has logged something today.
-    let computerSinceMs = null;
-    // Local calendar day the anchor above was captured for, so the home counter
-    // rolls over at midnight even when the panel is left open across it.
-    let anchorDay = null;
+    // The session you're in right now (from the classifier, via getCurrentSession):
+    // active SCREEN time so far, and whether you're active this instant. This is
+    // "apps actively being used", and it RESETS on a real new session (a long break
+    // / the morning) — not the calendar day and not how long the machine's been on.
+    // `base` is the active-ms reading at the last fetch; while active we tick from
+    // there for a live feel and re-fetch to correct drift / freeze on a break.
+    let sessActiveBaseMs = 0;
+    let sessAnchorTs = 0;
+    let sessActive = false;
+    let sessKnown = false;
     // Set true when the user skips the intent invite, so a re-summon within the
     // SAME session doesn't re-nag. Reset to false on a genuine new session (the
     // door) — see onSummon.
     let intentDismissedThisSession = false;
-    // Home's "Tune your Mac" disclosure loads its tweak list lazily on first open.
-    let homeTweaksLoaded = false;
 
     const $ = (id) => document.getElementById(id);
 
-    // ── Greeting + uptime ──
-    function fmtUptime(ms) {
-      const total = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-      const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60);
-      if (h > 0) return `${h}h ${m}m`;
-      if (m > 0) return `${m}m`;
-      return 'just now';
-    }
+    // ── Greeting + session screen-time ──
     function greetingForHour() {
       const h = new Date().getHours();
       if (h < 5) return 'Still up.';
@@ -460,25 +477,28 @@
       if (h < 18) return 'Good afternoon.';
       return 'Good evening.';
     }
+    // The home line: active SCREEN time in the session you're in now. While active
+    // we tick locally from the last reading (minute-granular, so this is smooth);
+    // a break freezes it and refreshSession() re-reads the true figure.
     function renderUptime() {
-      // Crossed midnight with the panel open → re-anchor to the new day so the
-      // "today" figure resets instead of climbing into yesterday's total.
-      if (anchorDay && anchorDay !== new Date().toDateString()) { anchorComputerSince(); return; }
-      const since = computerSinceMs || state.sessionStartMs;
-      const suffix = computerSinceMs ? 'today' : 'this session';
-      $('uptime').textContent = `On your computer for ${fmtUptime(since)} ${suffix}`;
+      const el = $('uptime');
+      if (!el) return;
+      if (!sessKnown) { el.textContent = ''; return; }
+      const live = sessActive ? (Date.now() - sessAnchorTs) : 0;
+      el.textContent = `${fmtDur(sessActiveBaseMs + live)} on screen this session`;
     }
 
-    // Anchor (or re-anchor) the home counter to the first sensed event of today.
-    // Pulled from the Observer summary so it reflects real elapsed time, survives
-    // restarts, and resets cleanly at local midnight.
-    async function anchorComputerSince() {
-      anchorDay = new Date().toDateString();
+    // Pull the current session from the classifier — active time so far + whether
+    // you're active right now. Resets cleanly when a new session begins, so the
+    // morning shows a fresh count instead of climbing from login.
+    async function refreshSession() {
       try {
-        const summary = await api.getDailySummary();
-        computerSinceMs = (summary && summary.timeOnComputerMs > 0)
-          ? Date.now() - summary.timeOnComputerMs : null;
-      } catch (_) { computerSinceMs = null; }
+        const s = await api.getCurrentSession();
+        sessKnown = !!(s && s.startMs);
+        sessActiveBaseMs = (s && s.activeMs) || 0;
+        sessActive = !!(s && s.active);
+        sessAnchorTs = Date.now();
+      } catch (_) { sessKnown = false; }
       renderUptime();
     }
 
@@ -528,8 +548,10 @@
         if (state && state.intent) {
           try { state = await api.setIntent(null, null); } catch (_) {}
         }
-        anchorComputerSince();
       }
+      // Re-read the session either way: a new session resets the screen-time
+      // figure; a mid-session re-summon just refreshes it to "now".
+      await refreshSession();
       renderHome();
     }
 
@@ -547,6 +569,7 @@
       container.innerHTML = '';
       let list = tweaks;
       if (opts.featuredOnly) list = list.filter(t => t.featured);
+      if (opts.notFeatured) list = list.filter(t => !t.featured);
       if (opts.scriptableOnly) list = list.filter(t => t.kind === 'scriptable');
       list.forEach(tw => {
         const row = document.createElement('div');
@@ -629,7 +652,10 @@
           return `<div class="blk ${b.open ? 'open' : ''}" style="left:${left}%; width:${w}%" title="${esc(b.primaryContext || '')}"></div>`;
         }).join('');
         const ctx = s.blocks.map(b => b.primaryContext).find(Boolean) || '';
-        const meta = `${fmtDur(s.endTs - s.startTs)}${ctx ? ' · ' + esc(ctx) : ''}`;
+        const sw = (s.switchCount || 0);
+        // Lead with active (screen) time + switch count — the head shows the
+        // wall-clock span; context trails and may ellipsis-truncate if tight.
+        const meta = `${fmtDur(s.activeMs)} active · ${sw} switch${sw === 1 ? '' : 'es'}${ctx ? ' · ' + esc(ctx) : ''}`;
         return `<div class="sess">
           <div class="sess-head"><span>${fmtClock(s.startTs)} – ${s.open ? 'now' : fmtClock(s.endTs)}</span><span class="meta">${meta}</span></div>
           <div class="sess-track">${blks}</div>
@@ -671,6 +697,16 @@
     async function openObserver() {
       $('observer').classList.remove('hidden');
       await refreshObserver();
+    }
+
+    // Tune-your-Mac sheet: the reversible desktop tweaks. The highest-impact few
+    // show up front; the rest sit behind a "More tweaks" disclosure so the page
+    // stays calm. Site-calming isn't here anymore — it's a hint to the extension.
+    async function openTune() {
+      $('tune').classList.remove('hidden');
+      await refreshTweaks();
+      renderTweaks($('tune-tweaks'), { selectable: false, featuredOnly: true });
+      renderTweaks($('tune-tweaks-more'), { selectable: false, notFeatured: true });
     }
 
     // Export the full event log to a file. The backend writes it to Downloads
@@ -740,16 +776,10 @@
     function wireEvents() {
       $('btn-observer').onclick = openObserver;
       $('observer-close').onclick = () => $('observer').classList.add('hidden');
+      $('btn-tune').onclick = openTune;
+      $('tune-close').onclick = () => $('tune').classList.add('hidden');
       $('export-csv').onclick = () => exportLog('csv');
       $('export-json').onclick = () => exportLog('json');
-
-      // Mac tweaks: load the featured list the first time the Home disclosure opens.
-      $('home-tweaks-details').addEventListener('toggle', async (e) => {
-        if (!e.target.open || homeTweaksLoaded) return;
-        homeTweaksLoaded = true;
-        await refreshTweaks();
-        renderTweaks($('home-tweaks'), { selectable: false, featuredOnly: true });
-      });
 
       // Intent presets: each chip sets the label + its mapped mode in one tap.
       $('intent-presets').querySelectorAll('.intent-chip[data-label]').forEach(b =>
@@ -790,8 +820,10 @@
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
         const observerOpen = !$('observer').classList.contains('hidden');
+        const tuneOpen = !$('tune').classList.contains('hidden');
         const obOpen = !$('onboarding').classList.contains('hidden');
         if (observerOpen) { $('observer').classList.add('hidden'); }
+        else if (tuneOpen) { $('tune').classList.add('hidden'); }
         else if (obOpen) { /* keep onboarding modal */ }
         else if (api) { api.hidePanel(); }
       });
@@ -809,9 +841,8 @@
         config = await api.getConfig();
         state = await api.getState();
 
-        // Anchor the home uptime to the first sensed event of the day (real
-        // time on computer), falling back to the process start until then.
-        await anchorComputerSince();
+        // Seed the home screen-time figure from the current session.
+        await refreshSession();
 
         wireEvents();
         renderHome();
@@ -821,13 +852,19 @@
         // The door: re-greet / re-invite intent on a genuine new session.
         if (api.onPanelSummoned) api.onPanelSummoned((p) => onSummon(!!(p && p.newSession)));
         // Live activity signal from the sensing engine — refreshes the Observer's
-        // status line (and its stats, if it's open) when state changes.
+        // status line (and its stats, if it's open) when state changes. An
+        // active⇄break edge also re-reads the session so the home figure freezes
+        // on a break and resumes on return instead of drifting.
         api.onSensingUpdate((s) => {
           lastSensing = s;
+          const nowActive = !!(s && s.state === 'active');
+          if (nowActive !== sessActive) refreshSession();
           renderObsLive();
           if (!$('observer').classList.contains('hidden')) refreshObserver();
         });
-        setInterval(renderUptime, 30000);
+        // Tick the live figure smoothly; re-read periodically to correct drift.
+        setInterval(renderUptime, 15000);
+        setInterval(refreshSession, 60000);
 
         if (!config.onboardingComplete) startOnboarding();
       } catch (e) {

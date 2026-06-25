@@ -27,6 +27,25 @@
     .desc { font-size: 12px; line-height: 1.45; color: #a8a8a8; margin: 11px 2px 0; min-height: 34px; }
     .desc b { color: #d8d8d8; font-weight: 600; }
 
+    /* Calm distracting sites — moved here from the desktop app (it acts in Chrome,
+       so it lives in Chrome). Friction-independent of the Off/Nudge/Block mode. */
+    .calm { margin-top: 13px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+    .calm-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .calm-title { font-size: 12.5px; font-weight: 500; color: #e2e2e2; }
+    .calm-desc { font-size: 11px; line-height: 1.45; color: #8f8f8f; margin: 5px 2px 0; }
+    .calm-subs { margin: 10px 0 1px; display: flex; flex-direction: column; gap: 9px; }
+    .calm-subs.hidden { display: none; }
+    .sub { display: flex; align-items: center; gap: 9px; font-size: 12px; color: #c2c2c2; cursor: pointer; }
+    input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
+    /* The master on/off switch — a compact track + knob. */
+    .switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+    .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+    .switch .track { position: absolute; inset: 0; background: rgba(255,255,255,0.14); border-radius: 999px; transition: background .15s; }
+    .switch .track::before { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+      background: #f5f5f5; border-radius: 50%; transition: transform .15s; }
+    .switch input:checked + .track { background: var(--accent); }
+    .switch input:checked + .track::before { transform: translateX(16px); }
+
     .status { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #9a9a9a;
       margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255,255,255,0.08); }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; flex-shrink: 0; }
@@ -48,6 +67,20 @@
   </div>
 
   <div class="desc" id="desc"></div>
+
+  <div class="calm" id="calm">
+    <div class="calm-head">
+      <span class="calm-title">Calm distracting sites</span>
+      <label class="switch" title="Calm distracting sites">
+        <input type="checkbox" id="calm-toggle"><span class="track"></span>
+      </label>
+    </div>
+    <div class="calm-desc">Quietly declutters &amp; slows YouTube, X, LinkedIn, Instagram, Reddit. Takes effect on pages you open or reload.</div>
+    <div class="calm-subs hidden" id="calm-subs">
+      <label class="sub"><input type="checkbox" id="calm-feedfade">Fade endless feeds (X / LinkedIn)</label>
+      <label class="sub"><input type="checkbox" id="calm-ythome">Hide YouTube home grid</label>
+    </div>
+  </div>
 
   <div class="status" id="status">
     <span class="dot"></span><span id="status-text">Checking…</span>

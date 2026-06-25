@@ -67,6 +67,12 @@ pub struct Session {
     pub start_ts: i64,
     pub end_ts: i64,
     pub open: bool,
+    /// Active (screen) time in this session = sum of its block durations. This is
+    /// "apps actively being used", excluding the breaks between blocks — the
+    /// honest "screen time" figure, as opposed to wall-clock since `start_ts`.
+    pub active_ms: i64,
+    /// OS app-focus switches within this session.
+    pub switch_count: usize,
     pub blocks: Vec<Block>,
 }
 
@@ -269,18 +275,29 @@ fn group_into_sessions(builts: Vec<Built>, session_gap_ms: i64) -> Timeline {
 
     let mut prev_end: Option<i64> = None;
     for built in builts {
-        switch_count += built.switches;
+        let switches = built.switches;
+        switch_count += switches;
         let blk = built.block;
+        let blk_ms = (blk.end_ts - blk.start_ts).max(0);
         let new_session = match prev_end {
             None => true,
             Some(end) => built.hard_before || (blk.start_ts - end) >= session_gap_ms,
         };
         prev_end = Some(blk.end_ts);
         if new_session {
-            sessions.push(Session { start_ts: blk.start_ts, end_ts: blk.end_ts, open: blk.open, blocks: vec![blk] });
+            sessions.push(Session {
+                start_ts: blk.start_ts,
+                end_ts: blk.end_ts,
+                open: blk.open,
+                active_ms: blk_ms,
+                switch_count: switches,
+                blocks: vec![blk],
+            });
         } else if let Some(s) = sessions.last_mut() {
             s.end_ts = blk.end_ts;
             s.open = blk.open;
+            s.active_ms += blk_ms;
+            s.switch_count += switches;
             s.blocks.push(blk);
         }
     }
@@ -348,6 +365,30 @@ mod tests {
         ];
         let t2 = classify(&long, 61 * MIN, 5 * MIN, 30 * MIN);
         assert_eq!(t2.sessions.len(), 2, "40m break splits sessions");
+    }
+
+    // Per-session `active_ms` sums the session's block durations (excluding the
+    // breaks between them), and `switch_count` counts the OS focus changes within
+    // that session — the "screen time" + "switches" the home counter surfaces.
+    #[test]
+    fn session_active_ms_excludes_breaks_and_counts_switches() {
+        let evs = vec![
+            ev(0, "active", "os", None, None),
+            ev(0, "app_focus", "os", Some("com.apple.Terminal"), Some(r#"{"name":"Terminal"}"#)),
+            ev(10 * MIN, "app_focus", "os", Some("com.apple.Safari"), Some(r#"{"name":"Safari"}"#)),
+            ev(20 * MIN, "idle", "os", None, Some(r#"{"idleSecs":0}"#)), // block A [0,20m]
+            ev(28 * MIN, "active", "os", None, None),                    // 8m break (< gap)
+            ev(38 * MIN, "idle", "os", None, Some(r#"{"idleSecs":0}"#)), // block B [28m,38m]
+        ];
+        let t = classify(&evs, 39 * MIN, 5 * MIN, 30 * MIN);
+        assert_eq!(t.sessions.len(), 1, "8m break keeps one session");
+        let s = &t.sessions[0];
+        // active = 20m + 10m = 30m of screen time; the 8m break is NOT counted.
+        assert_eq!(s.active_ms, 30 * MIN);
+        // one focus change inside the session (Terminal → Safari).
+        assert_eq!(s.switch_count, 1);
+        // the session spans 38m wall-clock even though only 30m was active.
+        assert_eq!(s.end_ts - s.start_ts, 38 * MIN);
     }
 
     // `idle` back-dates the block end by idleSecs.

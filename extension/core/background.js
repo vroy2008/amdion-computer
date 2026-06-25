@@ -62,6 +62,7 @@ onBridge('open_tab', (payload) => { if (payload && payload.url) chrome.tabs.crea
 onBridge('focus_tab', (payload) => focusTab(payload && payload.tabId));
 onBridge('close_tab', (payload) => closeTab(payload && payload.tabId));
 onBridge('intent', applyIntent);
+onBridge('set_features', applyFeatureUnlocks);
 
 // `tabId` from the app may be Amdion's internal id (not a Chrome tab id) until the
 // id map exists — coerce and bail unless it's a real integer id.
@@ -87,6 +88,20 @@ function closeTab(id) {
 function applyIntent(payload) {
   const raw = payload && typeof payload.intent === 'string' ? payload.intent.trim() : '';
   chrome.storage.local.set({ intent: raw || null });
+}
+
+// The desktop owns which bonus features are unlocked (panel-driven). It pushes
+// `set_features` at connect and on every settings save; we MERGE the map into
+// chrome.storage.local 'features' — the enable-gate the registry mirrors — rather
+// than replacing it, so a feature the panel doesn't expose yet but a developer
+// flipped on by hand (dogfooding) survives an app reconnect. The storage
+// onChanged listener above re-derives the enable map and reconciles content
+// scripts, so unlocking a feature here injects its scripts with no reinstall.
+function applyFeatureUnlocks(payload) {
+  const incoming = (payload && payload.features) || {};
+  chrome.storage.local.get(['features']).then((r) => {
+    chrome.storage.local.set({ features: { ...(r.features || {}), ...incoming } });
+  });
 }
 
 // ── Activity reporting (track — always on, all modes) ─────────────────────────
