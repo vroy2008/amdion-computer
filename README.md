@@ -36,6 +36,8 @@ You can set the mode yourself from the extension's toolbar button — or let it 
 | Communicate | **Nudge** |
 | Explore | **Off** |
 
+**Optional — calm the sites themselves.** Flip on **Calm distracting sites** in the extension's popup and Amdion quietly declutters and slows the distracting ones: it hides things like the autoplay rail, Shorts shelves, and trending sidebars, with extra toggles to fade endless feeds and hide the YouTube home grid. Off until you switch it on.
+
 Your real Chrome — logins, profile, and other extensions — stays untouched.
 
 ---
@@ -83,7 +85,7 @@ The extension's popup shows **Connected** once it links to the app. That's it.
 
 ## What else is in here
 
-The repo also carries some extra, experimental features — an in-page reader, quick notes, a "present" mode, page-decluttering, and an optional AI assistant. **They're all off by default.** A fresh install runs only the time tracking and the Off / Nudge / Block modes above; the extras stay dormant until you turn them on, and the assistant isn't even compiled into the default build.
+A few more experimental pieces live in the repo but aren't surfaced in the UI yet — an in-page reader, quick notes, and a "present" mode, plus an optional AI assistant. They stay fully dormant: a fresh install never loads them, they're enabled by hand for now, and the assistant isn't even compiled into the default build.
 
 ---
 
