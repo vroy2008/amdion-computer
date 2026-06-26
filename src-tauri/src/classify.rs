@@ -186,6 +186,31 @@ fn is_locked(ev: &Event) -> bool {
             .unwrap_or(false)
 }
 
+/// macOS frontmost processes that mean "no human present": the lock screen /
+/// login window and the password screensaver. While one of these is frontmost
+/// the screen is locked or the saver is up — the user is away, not attending —
+/// so it must never count as presence or be attributed app time. Shared with the
+/// live sensor ([[crate::sensing]]); kept here too so the derive-on-read
+/// classifier *also* corrects history — an `app_focus` to one of these, logged
+/// before away-detection existed, is read as the moment the block ended (rather
+/// than dumping the whole lock onto `loginwindow`, the bug this fixes).
+pub(crate) fn is_away_bundle(bundle: &str) -> bool {
+    matches!(bundle, "com.apple.loginwindow" | "com.apple.ScreenSaverEngine")
+}
+
+/// A hard "away" boundary: the screen locked or the saver came up. Three
+/// sources: the browser `idle_state:locked`, an OS `locked` event (the live
+/// sensor), or — for data predating OS away-detection — an OS `app_focus` whose
+/// target is the lock screen / screensaver. Each ends the current block and
+/// starts a NEW session on the next presence, regardless of the break threshold.
+fn is_away_boundary(ev: &Event) -> bool {
+    is_locked(ev)
+        || ev.kind == "locked"
+        || (ev.kind == "app_focus"
+            && ev.source == "os"
+            && ev.app.as_deref().is_some_and(is_away_bundle))
+}
+
 /// Derive the timeline from an ordered event slice. `now` is the read time
 /// (closes an open trailing block); `break_ms`/`session_gap_ms` come from config.
 pub fn classify(events: &[Event], now: i64, _break_ms: i64, session_gap_ms: i64) -> Timeline {
@@ -213,7 +238,7 @@ pub fn classify(events: &[Event], now: i64, _break_ms: i64, session_gap_ms: i64)
             close(&mut cur, &mut blocks, ev.ts);
             continue;
         }
-        if is_locked(ev) {
+        if is_away_boundary(ev) {
             close(&mut cur, &mut blocks, ev.ts);
             pending_hard = true;
             continue;
@@ -446,6 +471,48 @@ mod tests {
         assert_eq!(t.sessions.len(), 1);
         assert_eq!(t.sessions[0].blocks[0].start_ts, 0);
         assert_eq!(t.sessions[0].blocks[0].end_ts, 20 * MIN);
+    }
+
+    // An OS `locked` event (the live sensor's lock signal) is a hard session
+    // boundary just like the browser one: it ends the block and the next
+    // presence starts a fresh session even within the session gap.
+    #[test]
+    fn os_locked_forces_new_session() {
+        let evs = vec![
+            ev(0, "active", "os", None, None),
+            ev(5 * MIN, "locked", "os", None, None),
+            ev(6 * MIN, "active", "os", None, None), // only 1m later
+            ev(16 * MIN, "idle", "os", None, Some(r#"{"idleSecs":0}"#)),
+        ];
+        let t = classify(&evs, 17 * MIN, 5 * MIN, 30 * MIN);
+        assert_eq!(t.sessions.len(), 2, "os locked splits despite 1m gap");
+        assert_eq!(t.sessions[0].blocks[0].end_ts, 5 * MIN, "block ends at the lock");
+    }
+
+    // A stored `app_focus` to the lock screen (data logged before OS
+    // away-detection existed) is read as the block end — the long lock is NOT
+    // attributed to loginwindow, and it splits the session. This is the
+    // retroactive fix for the "loginwindow = hours of attention" bug.
+    #[test]
+    fn loginwindow_focus_closes_block_and_is_not_attributed() {
+        let evs = vec![
+            ev(0, "active", "os", None, None),
+            ev(0, "app_focus", "os", Some("com.apple.Safari"), Some(r#"{"name":"Safari"}"#)),
+            // user locks at 10m; the old sensor logged a loginwindow focus...
+            ev(10 * MIN, "app_focus", "os", Some("com.apple.loginwindow"), Some(r#"{"name":"loginwindow"}"#)),
+            // ...then nothing for hours (locked), then they return.
+            ev(300 * MIN, "active", "os", None, None),
+            ev(305 * MIN, "idle", "os", None, Some(r#"{"idleSecs":0}"#)),
+        ];
+        let t = classify(&evs, 306 * MIN, 5 * MIN, 30 * MIN);
+        assert_eq!(t.sessions.len(), 2, "the lock splits the session");
+        let b0 = &t.sessions[0].blocks[0];
+        assert_eq!(b0.end_ts, 10 * MIN, "first block ends at the lock, not extended");
+        assert_eq!(b0.primary_context.as_deref(), Some("Safari"));
+        assert!(
+            b0.apps.iter().all(|a| a.bundle != "com.apple.loginwindow"),
+            "loginwindow never appears in the app breakdown"
+        );
     }
 
     // An un-closed trailing run is closed at `now` and flagged open.

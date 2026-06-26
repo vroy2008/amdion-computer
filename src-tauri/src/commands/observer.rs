@@ -37,8 +37,12 @@ pub struct SiteStat {
 #[serde(rename_all = "camelCase")]
 pub struct DailySummary {
     pub date: String,
-    /// Span from the first event of the local day to now (respects sleep/breaks
-    /// — the real "time on computer" the process-start placeholder stood in for).
+    /// Time at the machine today: the sum of session spans (each sitting,
+    /// including its short within-session breaks — you were still at the desk).
+    /// EXCLUDES the gaps between sessions — long breaks, screen locks, and sleep,
+    /// which are real absences — so it is NOT wall-clock since the first event
+    /// (the old definition, which counted hours of locked/asleep time as "on
+    /// computer"). Always ≥ `active_ms` (which also drops within-session breaks).
     pub time_on_computer_ms: i64,
     /// Sum of block (active) durations.
     pub active_ms: i64,
@@ -224,8 +228,14 @@ fn summarize(
     let mut apps: Vec<AppStat> = apps.into_values().filter(|a| a.ms > 0).collect();
     apps.sort_by(|a, b| b.ms.cmp(&a.ms));
 
-    let first_ts = events.first().map(|e| e.ts).unwrap_or(now);
-    let time_on_computer_ms = (now - first_ts).max(0);
+    // "On computer" = sum of session spans: the gaps *between* sessions (long
+    // breaks, screen locks, sleep) are real absences and excluded. Honest "time
+    // at the machine", not wall-clock since the first event.
+    let time_on_computer_ms: i64 = timeline
+        .sessions
+        .iter()
+        .map(|s| (s.end_ts - s.start_ts).max(0))
+        .sum();
     let (reading_ms, articles_read) = reading_stats(events);
 
     DailySummary {
@@ -512,7 +522,9 @@ mod tests {
         assert_eq!(s.break_count, 2);
         assert_eq!(s.switch_count, 2);
         assert_eq!(s.active_ms, (60 + 30 + 20) * MIN, "active = sum of block durations");
-        assert_eq!(s.time_on_computer_ms, 180 * MIN, "first event → now");
+        // 3 sessions span [0,60], [100,130], [160,180] → 60+30+20 = 110m. The
+        // two ≥30m gaps between them are absences, excluded (not 180m wall-clock).
+        assert_eq!(s.time_on_computer_ms, 110 * MIN, "sum of session spans");
 
         // Chrome dominates (30m in block1 + 22m in block2); all four apps present.
         assert_eq!(s.apps[0].name, "Google Chrome");
@@ -528,6 +540,51 @@ mod tests {
         assert_eq!(site_ms("reddit.com"), Some(MAX_SITE_SPAN_MS));
         // No reads in the seeded day.
         assert_eq!((s.reading_ms, s.articles_read), (0, 0));
+    }
+
+    // "On computer" sums session spans — a short within-session break counts
+    // (you were at the desk) but the long inter-session gap (an absence) does
+    // not. "Active" drops both. Block A [0,20m], 8m break (<30m → same session),
+    // block B [28m,38m]; then a 40m gap (absence) and block C [78m,88m].
+    #[test]
+    fn time_on_computer_sums_session_spans_not_wall_clock() {
+        let evs = vec![
+            ev(0, "active", "os", None, None, None),
+            ev(20, "idle", "os", None, None, Some(r#"{"idleSecs":0}"#)), // A [0,20]
+            ev(28, "active", "os", None, None, None),                    // 8m break
+            ev(38, "idle", "os", None, None, Some(r#"{"idleSecs":0}"#)), // B [28,38]
+            ev(78, "active", "os", None, None, None),                    // 40m gap → new session
+            ev(88, "idle", "os", None, None, Some(r#"{"idleSecs":0}"#)), // C [78,88]
+        ];
+        let s = summarize(&evs, 90 * MIN, "2026-06-20".into(), 5 * MIN, 30 * MIN);
+        // session 1 span [0,38]=38m (incl. the 8m break) + session 2 span 10m.
+        assert_eq!(s.time_on_computer_ms, (38 + 10) * MIN, "sum of session spans");
+        // active = block durations only: 20 + 10 + 10 = 40m (8m break excluded).
+        assert_eq!(s.active_ms, 40 * MIN);
+        assert_eq!(s.break_count, 2);
+        assert!(s.time_on_computer_ms > s.active_ms, "on-computer ≥ active");
+    }
+
+    // The lock screen is not attention: a `loginwindow` frontmost (logged by the
+    // old sensor) ends the block, is excluded from "on computer", and never
+    // appears in the per-app breakdown — the retroactive fix for the bug where
+    // hours of locked time were credited to `loginwindow`.
+    #[test]
+    fn lock_screen_excluded_from_stats() {
+        let evs = vec![
+            ev(0, "active", "os", None, None, None),
+            ev(0, "app_focus", "os", Some("com.apple.Safari"), None, Some(r#"{"name":"Safari"}"#)),
+            // locked at 10m; old sensor logged loginwindow, then hours of nothing.
+            ev(10, "app_focus", "os", Some("com.apple.loginwindow"), None, Some(r#"{"name":"loginwindow"}"#)),
+        ];
+        let s = summarize(&evs, 480 * MIN, "2026-06-20".into(), 5 * MIN, 30 * MIN);
+        assert_eq!(s.active_ms, 10 * MIN, "block ends at the lock, not 8h");
+        assert_eq!(s.time_on_computer_ms, 10 * MIN);
+        assert!(s.apps.iter().all(|a| a.bundle != "com.apple.loginwindow"));
+        assert_eq!(
+            s.apps.iter().find(|a| a.bundle == "com.apple.Safari").map(|a| a.ms),
+            Some(10 * MIN),
+        );
     }
 
     // Reading time sums `secondsRead` across `read_ended` events; an in-progress
